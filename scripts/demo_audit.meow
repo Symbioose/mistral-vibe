@@ -2,7 +2,7 @@ meta = {
     "name": "demo-audit",
     "description": "Audit parallele: scan par lots, verification, synthese",
     "phases": [
-        {"title": "Scan", "detail": "un agent par fichier, tous en parallele"},
+        {"title": "Scan", "detail": "16 agents en parallele, 3 fichiers chacun"},
         {"title": "Verify", "detail": "re-verification independante des findings"},
         {"title": "Synthese", "detail": "fusion + rapport JSON"},
     ],
@@ -36,7 +36,7 @@ VERDICT = {
 }
 
 paths = [str(p) for p in (args or [])]
-batches = list(paths)
+batches = ["\n".join(paths[i : i + 3]) for i in range(0, len(paths), 3)]
 
 phase("Scan")
 scans = await parallel([

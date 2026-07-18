@@ -409,7 +409,7 @@ async def main() -> None:
         vibe_cfg = corpus_dir / ".vibe"
         vibe_cfg.mkdir(exist_ok=True)
         (vibe_cfg / "config.toml").write_text(
-            "[tools.meow_meow_meow]\nmax_concurrency = 64\n", encoding="utf-8"
+            "[tools.meow_meow_meow]\nmax_concurrency = 16\n", encoding="utf-8"
         )
         (corpus_dir / "AGENTS.md").write_text(
             "# Regles du projet\n\n"
