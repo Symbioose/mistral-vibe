@@ -17,6 +17,8 @@ from vibe.core.workflows.models import WorkflowMeta
 
 WORKFLOW_MAIN_NAME = "__workflow_main__"
 _OFFENDING_LINE_MAX_LEN = 120
+MAX_SCRIPT_LINES = 200
+MAX_STRING_LITERAL_LEN = 250
 
 _ALLOWED_BUILTIN_NAMES = (
     "abs",
@@ -120,6 +122,13 @@ def parse_workflow_script(source: str) -> ParsedScript:
         meta = _extract_meta(tree)
     except WorkflowScriptError as e:
         errors.append(str(e))
+    line_count = len(source.splitlines())
+    if line_count > MAX_SCRIPT_LINES:
+        errors.append(
+            f"script is {line_count} lines; the cap is {MAX_SCRIPT_LINES}. "
+            "Workflow scripts must stay short and mechanical — move prose "
+            "briefs to the `prompts` tool argument and data to `args`"
+        )
     errors.extend(_collect_violations(tree))
     if errors:
         if len(errors) == 1:
@@ -247,6 +256,17 @@ def _collect_violations(tree: ast.Module) -> list[str]:
             )
         elif isinstance(node, ast.Name) and node.id in {"__builtins__", "__import__"}:
             errors.append(f"{node.id} is unavailable in workflow scripts{location}")
+        elif (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and len(node.value) > MAX_STRING_LITERAL_LEN
+            and not _is_meta_line(tree, node)
+        ):
+            errors.append(
+                f"string literal of {len(node.value)} chars{location} — the cap is "
+                f"{MAX_STRING_LITERAL_LEN}. Move this prose to the `prompts` tool "
+                'argument (a JSON object) and reference it as prompts["some_key"]'
+            )
         else:
             shadowed = _shadowed_primitive(node)
             if shadowed is not None:
@@ -257,6 +277,20 @@ def _collect_violations(tree: ast.Module) -> list[str]:
                 )
     errors.extend(_collect_missing_awaits(tree))
     return errors
+
+
+def _is_meta_line(tree: ast.Module, node: ast.Constant) -> bool:
+    # meta strings have their own pydantic caps; don't double-report them here.
+    first = tree.body[0] if tree.body else None
+    if not isinstance(first, ast.Assign):
+        return False
+    lineno = getattr(node, "lineno", None)
+    end_lineno = getattr(first, "end_lineno", None)
+    return (
+        lineno is not None
+        and end_lineno is not None
+        and first.lineno <= lineno <= end_lineno
+    )
 
 
 def _shadowed_primitive(node: ast.AST) -> str | None:

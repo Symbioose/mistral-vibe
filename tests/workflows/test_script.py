@@ -170,6 +170,30 @@ def test_syntax_error_shows_offending_line_and_tip() -> None:
     assert "prompts" in message
 
 
+def test_long_string_literal_rejected() -> None:
+    prose = "word " * 100
+    script = f'meta = {{"name": "x", "description": "d"}}\nbrief = "{prose}"\n'
+    with pytest.raises(WorkflowScriptError, match="prompts"):
+        parse_workflow_script(script)
+
+
+def test_meta_strings_exempt_from_string_cap() -> None:
+    detail = "d" * 180
+    script = (
+        f'meta = {{"name": "x", "description": "ok", '
+        f'"phases": [{{"title": "Scan", "detail": "{detail}"}}]}}\n'
+        "return None\n"
+    )
+    parsed = parse_workflow_script(script)
+    assert parsed.meta.name == "x"
+
+
+def test_too_many_lines_rejected() -> None:
+    script = 'meta = {"name": "x", "description": "d"}\n' + "x = 1\n" * 250
+    with pytest.raises(WorkflowScriptError, match="lines; the cap is"):
+        parse_workflow_script(script)
+
+
 def test_all_errors_reported_together() -> None:
     script = (
         'meta = {"name": "x", "description": "d"}\n'

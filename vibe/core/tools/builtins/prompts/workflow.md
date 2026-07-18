@@ -64,6 +64,8 @@ RESERVED NAMES: `agent`, `parallel`, `pipeline`, `phase`, `log`, `result`, `args
 
 VALIDATION CONTRACT: every script is statically validated before a single agent runs — syntax, meta shape, reserved names, imports, forbidden modules, and missing `await` on `agent`/`parallel`/`pipeline` calls. A rejected script costs nothing; the error lists ALL violations with line numbers. Fix every listed item and re-invoke once — do not fix them one at a time.
 
+HARD CAPS (rejected, not warned): scripts over 200 lines, and any string literal over 250 characters. These exist because prose belongs in the `prompts` tool argument, not in Python strings. Write the script FIRST as short mechanical code (typically 20–60 lines), with every agent brief as `prompts["key"]` — then put the actual briefs in `prompts`.
+
 Subagents are told their final text IS the return value (not a human-facing message), so they return raw data. For structured output, use `schema` — validation happens at the call layer and the model retries on mismatch.
 
 ## Rules
