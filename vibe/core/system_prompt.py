@@ -263,10 +263,16 @@ def _get_available_subagents_section(agent_manager: AgentManager) -> str:
     if not agents:
         return ""
 
-    lines = ["# Available Subagents", ""]
-    lines.append("The following subagents can be spawned via the Task tool:")
+    lines = ["# Available Subagents", "", "Spawn these with the `task` tool:", ""]
     for agent in agents:
         lines.append(f"- **{agent.name}**: {agent.description}")
+    lines.extend([
+        "",
+        "When a task contains several independent units of work, launch one",
+        "subagent per unit — in parallel, in a single turn — instead of working",
+        "through the units sequentially yourself. Decide this before reading",
+        "any files. Do it proactively; the user does not need to ask for it.",
+    ])
 
     return "\n".join(lines)
 

@@ -151,6 +151,16 @@ class TestTaskToolResolvePermission:
         config = TaskToolConfig()
         assert "explore" in config.allowlist
 
+    def test_default_config_has_worker_in_allowlist(self) -> None:
+        config = TaskToolConfig()
+        assert "worker" in config.allowlist
+
+    def test_worker_allowed_by_default(self, task_tool: Task) -> None:
+        args = TaskArgs(task="do something", agent="worker")
+        result = task_tool.resolve_permission(args)
+        assert isinstance(result, PermissionContext)
+        assert result.permission is ToolPermission.ALWAYS
+
 
 class TestTaskToolExecution:
     @pytest.fixture

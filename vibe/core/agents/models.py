@@ -150,7 +150,11 @@ AUTO_APPROVE = AgentProfile(
 EXPLORE = AgentProfile(
     name=BuiltinAgentName.EXPLORE,
     display_name="Explore",
-    description="Read-only subagent for codebase exploration",
+    description=(
+        "Read-only subagent for codebase exploration. Use for broad searches "
+        "and codebase questions whose intermediate output you do not need in "
+        "your own context"
+    ),
     safety=AgentSafety.SAFE,
     agent_type=AgentType.SUBAGENT,
     overrides={"enabled_tools": ["grep", "read_file"], "system_prompt_id": "explore"},
@@ -160,7 +164,9 @@ WORKER = AgentProfile(
     name=BuiltinAgentName.WORKER,
     display_name="Worker",
     description=(
-        "Write-capable subagent that implements code in an isolated git worktree"
+        "Write-capable subagent that implements code in an isolated git "
+        "worktree. Assign one per independent unit of work (features, fixes, "
+        "tests, docs, refactors); several can run in parallel"
     ),
     safety=AgentSafety.DESTRUCTIVE,
     agent_type=AgentType.SUBAGENT,
