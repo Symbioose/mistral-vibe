@@ -797,8 +797,25 @@ StatusMessage {
 }
 
 .meow-cat {
+    width: 100%;
+    height: auto;
     padding-left: 2;
     margin-top: 1;
+}
+
+.meow-cat-strip {
+    width: 100%;
+    height: auto;
+}
+
+.meow-cat-item {
+    margin-right: 2;
+}
+
+.meow-cat-label {
+    width: 100%;
+    padding-left: 0;
+    margin-top: 0;
 }
 
 .meow_meow_meow-tree {

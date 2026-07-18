@@ -26,6 +26,7 @@ _MAX_ACTIVITY_LINES = 50
 _MAX_ACTIVITY_LOG = 500
 _RUNNING_ACTIVITY_TAIL = 2
 _PHASE_DETAIL_MAX_LEN = 44
+_MAX_VISIBLE_CATS = 8
 
 PhaseState = Literal["pending", "running", "done"]
 
@@ -226,7 +227,8 @@ class MeowMeowMeowCallMessage(ToolCallMessage):
     def __init__(self, event: Any = None, **kwargs: Any) -> None:
         self._tree: Vertical | None = None
         self._logs: Vertical | None = None
-        self._cat_row: Horizontal | None = None
+        self._cat_box: Vertical | None = None
+        self._cat_pool: list[NonSelectableStatic] = []
         self._cat_label: NoMarkupStatic | None = None
         self._phases: dict[str | None, MeowMeowMeowPhaseGroup] = {}
         self._agents: dict[int, MeowMeowMeowAgentRow] = {}
@@ -271,13 +273,24 @@ class MeowMeowMeowCallMessage(ToolCallMessage):
                 )
                 self._suffix_widget.display = False
                 yield self._suffix_widget
-            self._cat_row = Horizontal(classes="cat-container meow-cat")
-            self._cat_row.display = False
-            with self._cat_row:
-                yield NonSelectableStatic(KITTEN_ART, classes="cat-art kitten-art")
-                self._cat_label = NoMarkupStatic("", classes="cat-label kitten-label")
+            self._cat_box = Vertical(classes="meow-cat")
+            self._cat_box.display = False
+            with self._cat_box:
+                with Horizontal(classes="meow-cat-strip"):
+                    self._cat_pool = [
+                        NonSelectableStatic(
+                            KITTEN_ART, classes="cat-art kitten-art meow-cat-item"
+                        )
+                        for _ in range(_MAX_VISIBLE_CATS)
+                    ]
+                    for cat in self._cat_pool:
+                        cat.display = False
+                        yield cat
+                self._cat_label = NoMarkupStatic(
+                    "", classes="cat-label kitten-label meow-cat-label"
+                )
                 yield self._cat_label
-            yield self._cat_row
+            yield self._cat_box
             self._tree = Vertical(classes="meow_meow_meow-tree")
             yield self._tree
             self._logs = Vertical(classes="meow_meow_meow-logs")
@@ -309,22 +322,27 @@ class MeowMeowMeowCallMessage(ToolCallMessage):
         self._refresh_cat()
 
     def _refresh_cat(self) -> None:
-        if self._cat_row is None or self._cat_label is None:
+        if self._cat_box is None or self._cat_label is None:
             return
         if not self._agents_total:
-            self._cat_row.display = False
+            self._cat_box.display = False
             return
-        self._cat_row.display = True
+        self._cat_box.display = True
         running = self._agents_total - self._agents_finished
         if self._is_spinning and running > 0:
+            visible = min(running, _MAX_VISIBLE_CATS)
             noun = "kitten" if running == 1 else "kittens"
+            overflow = f" (+{running - visible})" if running > visible else ""
             label = (
-                f"meow · {running} {noun} hunting · "
+                f"{running} {noun} hunting{overflow} · "
                 f"{self._agents_finished}/{self._agents_total}"
             )
         else:
+            visible = 1
             noun = "kitten" if self._agents_total == 1 else "kittens"
-            label = f"meow · {self._agents_total} {noun} · done"
+            label = f"{self._agents_total} {noun} · done"
+        for index, cat in enumerate(self._cat_pool):
+            cat.display = index < visible
         self._cat_label.update(label)
 
     async def handle_meow_meow_meow_event(self, data: dict[str, Any]) -> None:
