@@ -315,8 +315,13 @@ class EventHandler:
             return
 
         if self._orchestrator_cat is None:
+            # Parallel workers start in any order: pin the fat cat above the
+            # first pending tool-call widget so it heads the whole group.
+            first_call_widget = next(iter(self.tool_calls.values()), None)
             self._orchestrator_cat = OrchestratorCatMessage()
-            await self.mount_callback(self._orchestrator_cat, before=anchor)
+            await self.mount_callback(
+                self._orchestrator_cat, before=first_call_widget or anchor
+            )
         self._orchestrator_cat.add_kitten()
 
         kitten = KittenMessage(event.agent.name, branch=event.branch)

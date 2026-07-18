@@ -97,6 +97,25 @@ async def test_first_kitten_brings_the_orchestrator_fat_cat() -> None:
 
 
 @pytest.mark.asyncio
+async def test_fat_cat_heads_the_group_even_when_a_later_worker_starts_first() -> None:
+    handler, mount_callback = _make_handler()
+    first_widget = await handler.handle_event(_task_call_event("call-a"))
+    await handler.handle_event(_task_call_event("call-b"))
+    await handler.handle_event(_task_call_event("call-c"))
+
+    # The LAST dispatched worker is the first to emit its started event.
+    await handler.handle_event(_started_event("call-c"))
+
+    fat_cat_mounts = [
+        call
+        for call in mount_callback.await_args_list
+        if isinstance(call.args[0], OrchestratorCatMessage)
+    ]
+    assert len(fat_cat_mounts) == 1
+    assert fat_cat_mounts[0].kwargs["before"] is first_widget
+
+
+@pytest.mark.asyncio
 async def test_subagent_finished_event_updates_the_kitten_status() -> None:
     handler, _ = _make_handler()
     await handler.handle_event(_task_call_event("parent-call"))

@@ -2076,7 +2076,6 @@ FeedbackBar {
 .subagent-kitten {
     width: 100%;
     height: auto;
-    margin-top: 1;
 }
 
 .subagent-kitten {
@@ -2101,17 +2100,10 @@ FeedbackBar {
     width: 1fr;
     height: auto;
     padding-left: 1;
+    margin-top: 1;
     color: $text-muted;
 
     &:ansi {
         text-style: dim;
     }
-}
-
-.kitten-label {
-    margin-top: 1;
-}
-
-.fat-cat-label {
-    margin-top: 2;
 }
