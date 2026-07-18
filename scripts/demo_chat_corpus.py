@@ -183,6 +183,7 @@ AGENTS_MD = """\
 
 FILES = {
     "AGENTS.md": AGENTS_MD,
+    ".gitignore": "__pycache__/\n*.pyc\n",
     "tests/__init__.py": "",
     "geometry.py": GEOMETRY,
     "text_tools.py": TEXT_TOOLS,
