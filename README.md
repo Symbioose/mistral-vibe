@@ -38,6 +38,8 @@ Two capabilities to try, each in under two minutes:
 | **Workers** | The agent splits a multi-part task and runs **one `worker` per part, concurrently**, each in its own git worktree, then merges the branches. |
 | **Orchestrator** | The `meow_meow_meow` tool runs a **deterministic multi-agent workflow** from a versioned script: parallel scan → adversarial verify → JSON synthesis. |
 
+**The headline number:** on a 96-file audit, the parallel workflow finds **48/48 planted bugs, zero false positives, in 38 seconds and 306k tokens** — the same job a single agent does in **7 min 50 s and 1.72 M tokens**. That's **12.5× faster and 5.6× cheaper at identical perfect accuracy**, and re-running it replays from the journal at **0 tokens**. Full measured table: [`docs/meowmeowmeow-benchmark.md`](docs/meowmeowmeow-benchmark.md).
+
 ### Setup (once)
 
 ```bash
@@ -68,9 +70,10 @@ Then paste this prompt:
 own `vibe-worker-*` branch, then the branches merged and
 `python -m unittest` going **green** — proof it worked, not just a claim.
 
-> Want to prove the agent decides *on its own*, with no steering file? Regenerate
-> with `--no-agents` (`... demo_chat_corpus.py --out /tmp/demo-workers --no-agents`).
-> The project then ships no `AGENTS.md`, and Vibe still fans out to workers.
+> **See it decide unaided:** regenerate with `--no-agents`
+> (`... demo_chat_corpus.py --out /tmp/demo-workers --no-agents`) — the project then
+> contains only bare code and tests, no project instructions of any kind, and Vibe
+> still reads the task, splits it into three modules, and fans out a worker per module.
 
 ### Use case 2 — Orchestrator (deterministic workflow)
 
@@ -90,7 +93,16 @@ Then paste this prompt:
 a fleet of agents **scan file batches in parallel**, each finding is
 **independently re-verified** (an adversarial pass that tries to refute it),
 and the survivors are **synthesized into a JSON bug report**. Compare the result
-against the planted ground truth in `/tmp/demo-audit/ground_truth.json`.
+against the planted ground truth in `/tmp/demo-audit/ground_truth.json`: on our
+measured runs the workflow recovers **100% of the planted bugs with zero false
+positives**, and it does so **12.5× faster and 5.6× cheaper than a single agent**
+at the largest scale — the full table is in [`docs/meowmeowmeow-benchmark.md`](docs/meowmeowmeow-benchmark.md).
+
+Want a bigger, more spectacular corpus? Scale it up:
+
+```bash
+uv run python scripts/benchmark_meowmeowmeow.py --files 24 --bugs 12 --fillers 14 --corpus-only --out /tmp/demo-audit
+```
 
 ---
 
