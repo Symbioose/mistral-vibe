@@ -253,6 +253,30 @@ async def test_running_row_shows_elapsed_and_thinking() -> None:
 
 
 @pytest.mark.asyncio
+async def test_kitten_appears_and_tracks_the_hunt() -> None:
+    app = _Harness()
+    async with app.run_test() as pilot:
+        widget = MeowMeowMeowCallMessage(tool_name="meow_meow_meow")
+        await app.mount(widget)
+        assert widget._cat_row is not None
+        assert widget._cat_row.display is False
+
+        widget._is_spinning = True
+        await widget.handle_meow_meow_meow_event(_started(1, "scan:0"))
+        await widget.handle_meow_meow_meow_event(_started(2, "scan:1"))
+        await pilot.pause()
+        assert widget._cat_row.display is True
+        assert widget._cat_label is not None
+        assert "2 kittens hunting" in str(widget._cat_label.render())
+
+        await widget.handle_meow_meow_meow_event(_finished(1))
+        await widget.handle_meow_meow_meow_event(_finished(2))
+        widget.settle(IndicatorState.SUCCESS)
+        await pilot.pause()
+        assert "2 kittens · done" in str(widget._cat_label.render())
+
+
+@pytest.mark.asyncio
 async def test_cached_agent_shows_replay_detail() -> None:
     app = _Harness()
     async with app.run_test() as pilot:

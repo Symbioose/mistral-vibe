@@ -8,6 +8,7 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
 
+from vibe.cli.textual_ui.widgets.cats import KITTEN_ART
 from vibe.cli.textual_ui.widgets.collapsible import ClickWithoutDragMixin
 from vibe.cli.textual_ui.widgets.links import LinkStatic
 from vibe.cli.textual_ui.widgets.no_markup_static import (
@@ -225,6 +226,8 @@ class MeowMeowMeowCallMessage(ToolCallMessage):
     def __init__(self, event: Any = None, **kwargs: Any) -> None:
         self._tree: Vertical | None = None
         self._logs: Vertical | None = None
+        self._cat_row: Horizontal | None = None
+        self._cat_label: NoMarkupStatic | None = None
         self._phases: dict[str | None, MeowMeowMeowPhaseGroup] = {}
         self._agents: dict[int, MeowMeowMeowAgentRow] = {}
         self._agent_phase: dict[int, str | None] = {}
@@ -268,6 +271,13 @@ class MeowMeowMeowCallMessage(ToolCallMessage):
                 )
                 self._suffix_widget.display = False
                 yield self._suffix_widget
+            self._cat_row = Horizontal(classes="cat-container meow-cat")
+            self._cat_row.display = False
+            with self._cat_row:
+                yield NonSelectableStatic(KITTEN_ART, classes="cat-art kitten-art")
+                self._cat_label = NoMarkupStatic("", classes="cat-label kitten-label")
+                yield self._cat_label
+            yield self._cat_row
             self._tree = Vertical(classes="meow_meow_meow-tree")
             yield self._tree
             self._logs = Vertical(classes="meow_meow_meow-logs")
@@ -296,6 +306,26 @@ class MeowMeowMeowCallMessage(ToolCallMessage):
             else:
                 group.refresh_header()
         super().settle(state)
+        self._refresh_cat()
+
+    def _refresh_cat(self) -> None:
+        if self._cat_row is None or self._cat_label is None:
+            return
+        if not self._agents_total:
+            self._cat_row.display = False
+            return
+        self._cat_row.display = True
+        running = self._agents_total - self._agents_finished
+        if self._is_spinning and running > 0:
+            noun = "kitten" if running == 1 else "kittens"
+            label = (
+                f"meow · {running} {noun} hunting · "
+                f"{self._agents_finished}/{self._agents_total}"
+            )
+        else:
+            noun = "kitten" if self._agents_total == 1 else "kittens"
+            label = f"meow · {self._agents_total} {noun} · done"
+        self._cat_label.update(label)
 
     async def handle_meow_meow_meow_event(self, data: dict[str, Any]) -> None:
         match data.get("kind"):
@@ -361,6 +391,7 @@ class MeowMeowMeowCallMessage(ToolCallMessage):
         group.started_count += 1
         await group.add_row(row)
         group.refresh_header()
+        self._refresh_cat()
         self.update_display()
 
     async def _on_agent_finished(self, data: dict[str, Any]) -> None:
@@ -382,6 +413,7 @@ class MeowMeowMeowCallMessage(ToolCallMessage):
             await group.prune_finished()
             group.refresh_header()
         self._settle_idle_phases()
+        self._refresh_cat()
         self.update_display()
 
     async def _append_log(self, message: str) -> None:

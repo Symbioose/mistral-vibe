@@ -796,6 +796,11 @@ StatusMessage {
     }
 }
 
+.meow-cat {
+    padding-left: 2;
+    margin-top: 1;
+}
+
 .meow_meow_meow-tree {
     width: 100%;
     height: auto;
