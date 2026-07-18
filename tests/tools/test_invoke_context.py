@@ -63,6 +63,7 @@ class TestToolInvokeWithContext:
     async def test_invoke_without_context(self, simple_tool: SimpleTool) -> None:
         result = await collect_result(simple_tool.invoke(value="test"))
 
+        assert isinstance(result, SimpleResult)
         assert result.output == "processed: test"
         assert result.had_context is False
         assert result.approval_callback_present is False
@@ -72,6 +73,7 @@ class TestToolInvokeWithContext:
         ctx = InvokeContext(tool_call_id="test-call-id")
         result = await collect_result(simple_tool.invoke(ctx=ctx, value="test"))
 
+        assert isinstance(result, SimpleResult)
         assert result.output == "processed: test"
         assert result.had_context is True
         assert result.approval_callback_present is False
@@ -90,6 +92,7 @@ class TestToolInvokeWithContext:
         ctx = InvokeContext(tool_call_id="test-call-id", approval_callback=callback)
         result = await collect_result(simple_tool.invoke(ctx=ctx, value="test"))
 
+        assert isinstance(result, SimpleResult)
         assert result.output == "processed: test"
         assert result.had_context is True
         assert result.approval_callback_present is True

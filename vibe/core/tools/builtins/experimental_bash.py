@@ -325,11 +325,13 @@ def _looks_like_path(token: str) -> bool:
 
 
 def _collect_outside_dirs(
-    command_parts: list[str], command_cwd: Path | None = None
+    command_parts: list[str],
+    command_cwd: Path | None = None,
+    workdir: Path | None = None,
 ) -> set[str]:
-    command_cwd = Path.cwd() if command_cwd is None else command_cwd
+    command_cwd = (workdir or Path.cwd()) if command_cwd is None else command_cwd
     dirs: set[str] = set()
-    if not is_path_within_workdir(str(command_cwd)) and not is_scratchpad_path(
+    if not is_path_within_workdir(str(command_cwd), workdir) and not is_scratchpad_path(
         str(command_cwd)
     ):
         dirs.add(str(command_cwd))
@@ -352,7 +354,7 @@ def _collect_outside_dirs(
                 resolved = command_cwd / resolved
             resolved = resolved.resolve()
 
-            if is_path_within_workdir(str(resolved)):
+            if is_path_within_workdir(str(resolved), workdir):
                 continue
             if is_scratchpad_path(str(resolved)):
                 continue
@@ -1433,9 +1435,9 @@ class ExperimentalBash(
         command_cwd = (
             Path(args.cwd).expanduser().resolve()
             if args.cwd is not None
-            else Path.cwd()
+            else self.workdir
         )
-        outside_dirs = _collect_outside_dirs(command_parts, command_cwd)
+        outside_dirs = _collect_outside_dirs(command_parts, command_cwd, self.workdir)
         context_required = self._build_context_permissions(args)
         if (
             self._is_unconditionally_allowed(
@@ -1468,7 +1470,7 @@ class ExperimentalBash(
         timeout = self._resolve_timeout(requested_timeout)
         max_bytes = self.config.max_output_bytes
         try:
-            cwd = Path(args.cwd).expanduser().resolve() if args.cwd else Path.cwd()
+            cwd = Path(args.cwd).expanduser().resolve() if args.cwd else self.workdir
             shell = _manager().resolve_shell(args.shell, self.config.shell)
             session = await asyncio.to_thread(
                 _manager().start,
