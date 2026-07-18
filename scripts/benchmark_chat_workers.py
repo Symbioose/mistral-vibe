@@ -150,12 +150,15 @@ async def bench_workers(project: Path, config: VibeConfig) -> dict[str, Any]:
         git(project, "worktree", "add", str(wt_path), "-b", f"wk_{module}")
         worktrees.append((module, wt_path))
 
+    gate = asyncio.Semaphore(14)
+
     async def one(module: str, wt_path: Path) -> tuple[int, int]:
         prompt = WORKER_BRIEF.format(
             module_path=wt_path / f"{module}.py",
             test_path=wt_path / "tests" / f"test_{module}.py",
         )
-        return await run_agent(prompt, config)
+        async with gate:
+            return await run_agent(prompt, config)
 
     start = time.monotonic()
     token_pairs = await asyncio.gather(
@@ -186,6 +189,8 @@ async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="bench_chat")
     parser.add_argument("--copies", type=int, default=1)
+    parser.add_argument("--solo-only", action="store_true")
+    parser.add_argument("--workers-only", action="store_true")
     parsed = parser.parse_args()
     out_dir = Path(parsed.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -193,17 +198,19 @@ async def main() -> None:
 
     results: list[dict[str, Any]] = []
 
-    solo_project = out_dir / "solo" / "project"
-    generate_project(solo_project, parsed.copies)
-    baseline_passed, baseline_total = run_tests(solo_project)
-    print(f"etat initial: {baseline_passed}/{baseline_total} tests verts", flush=True)
-    results.append(await bench_solo(solo_project, config))
-    print(json.dumps(results[-1]), flush=True)
+    if not parsed.workers_only:
+        solo_project = out_dir / "solo" / "project"
+        generate_project(solo_project, parsed.copies)
+        passed, total = run_tests(solo_project)
+        print(f"etat initial: {passed}/{total} tests verts", flush=True)
+        results.append(await bench_solo(solo_project, config))
+        print(json.dumps(results[-1]), flush=True)
 
-    workers_project = out_dir / "workers" / "project"
-    generate_project(workers_project, parsed.copies)
-    results.append(await bench_workers(workers_project, config))
-    print(json.dumps(results[-1]), flush=True)
+    if not parsed.solo_only:
+        workers_project = out_dir / "workers" / "project"
+        generate_project(workers_project, parsed.copies)
+        results.append(await bench_workers(workers_project, config))
+        print(json.dumps(results[-1]), flush=True)
 
     (out_dir / "results.json").write_text(
         json.dumps(results, indent=2), encoding="utf-8"
