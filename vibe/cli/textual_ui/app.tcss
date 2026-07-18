@@ -809,7 +809,14 @@ StatusMessage {
 }
 
 .meow-cat-item {
-    margin-right: 2;
+    margin-right: 1;
+
+    &.cat-color-0 { color: $mistral_orange; }
+    &.cat-color-1 { color: $secondary; }
+    &.cat-color-2 { color: $success; }
+    &.cat-color-3 { color: $warning; }
+    &.cat-color-4 { color: $primary; }
+    &.cat-color-5 { color: $foreground; }
 }
 
 .meow-cat-label {

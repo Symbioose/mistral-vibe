@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 import time
 from typing import Any, ClassVar, Literal
 
@@ -8,7 +9,7 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
 
-from vibe.cli.textual_ui.widgets.cats import KITTEN_ART
+from vibe.cli.textual_ui.widgets.cats import KITTEN_ART_LARGE
 from vibe.cli.textual_ui.widgets.collapsible import ClickWithoutDragMixin
 from vibe.cli.textual_ui.widgets.links import LinkStatic
 from vibe.cli.textual_ui.widgets.no_markup_static import (
@@ -26,7 +27,8 @@ _MAX_ACTIVITY_LINES = 50
 _MAX_ACTIVITY_LOG = 500
 _RUNNING_ACTIVITY_TAIL = 2
 _PHASE_DETAIL_MAX_LEN = 44
-_MAX_VISIBLE_CATS = 8
+_MAX_VISIBLE_CATS = 6
+_CAT_COLOR_CLASSES = tuple(f"cat-color-{i}" for i in range(6))
 
 PhaseState = Literal["pending", "running", "done"]
 
@@ -277,11 +279,14 @@ class MeowMeowMeowCallMessage(ToolCallMessage):
             self._cat_box.display = False
             with self._cat_box:
                 with Horizontal(classes="meow-cat-strip"):
+                    shades = list(_CAT_COLOR_CLASSES)
+                    random.shuffle(shades)
                     self._cat_pool = [
                         NonSelectableStatic(
-                            KITTEN_ART, classes="cat-art kitten-art meow-cat-item"
+                            KITTEN_ART_LARGE,
+                            classes=f"cat-art kitten-art meow-cat-item {shade}",
                         )
-                        for _ in range(_MAX_VISIBLE_CATS)
+                        for shade in shades[:_MAX_VISIBLE_CATS]
                     ]
                     for cat in self._cat_pool:
                         cat.display = False

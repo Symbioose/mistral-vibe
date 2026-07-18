@@ -46,7 +46,14 @@ def _render_grid(grid: list[str]) -> str:
     return render_braille(dots, max(len(row) for row in grid), len(grid))
 
 
+def _scaled(grid: list[str], factor: int) -> list[str]:
+    return [
+        "".join(char * factor for char in row) for row in grid for _ in range(factor)
+    ]
+
+
 KITTEN_ART = _render_grid(_KITTEN_GRID)
+KITTEN_ART_LARGE = _render_grid(_scaled(_KITTEN_GRID, 2))
 FAT_CAT_ART = _render_grid(_FAT_CAT_GRID)
 
 
