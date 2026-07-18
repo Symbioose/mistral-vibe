@@ -483,6 +483,7 @@ class VibeApp(App):  # noqa: PLR0904
             "ctrl+g", "open_plan_in_editor", "Edit Plan", show=False, priority=False
         ),
         Binding("ctrl+backslash", "toggle_debug_console", "Debug Console", show=False),
+        Binding("ctrl+w", "workflow_inspector", "Workflow Inspector", show=False),
     ]
 
     def get_driver_class(self) -> type[Driver]:
@@ -4042,7 +4043,29 @@ class VibeApp(App):  # noqa: PLR0904
         return interrupted
 
     def action_interrupt(self) -> None:
+        from vibe.cli.textual_ui.widgets.workflow_inspector import (
+            WorkflowInspectorScreen,
+        )
+
+        if isinstance(self.screen, WorkflowInspectorScreen):
+            self.screen.action_dismiss_inspector()
+            return
         self._try_interrupt()
+
+    def action_workflow_inspector(self) -> None:
+        from vibe.cli.textual_ui.widgets.workflow import WorkflowCallMessage
+        from vibe.cli.textual_ui.widgets.workflow_inspector import (
+            WorkflowInspectorScreen,
+        )
+
+        if isinstance(self.screen, WorkflowInspectorScreen):
+            self.screen.action_dismiss_inspector()
+            return
+        candidates = [w for w in WorkflowCallMessage.instances if w.is_attached]
+        if not candidates:
+            self.notify("No workflow in this session yet", severity="information")
+            return
+        self.push_screen(WorkflowInspectorScreen(candidates[-1]))
 
     async def on_history_load_more_requested(self, _: HistoryLoadMoreRequested) -> None:
         self._load_more.set_enabled(False)

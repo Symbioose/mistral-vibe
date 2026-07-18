@@ -40,6 +40,7 @@ MAX_FANOUT_ITEMS = 4096
 DEFAULT_SCHEMA_RETRIES = 2
 _LABEL_MAX_LEN = 60
 _LOG_MAX_LEN = 2000
+_PROMPT_EVENT_MAX_LEN = 6000
 
 
 class SubagentSpawner(Protocol):
@@ -172,7 +173,11 @@ class WorkflowRuntime:
                 self._journal.record(key, display, cached)
                 self._emit(
                     AgentStartedEvent(
-                        agent_id=agent_id, label=display, phase=phase_title, cached=True
+                        agent_id=agent_id,
+                        label=display,
+                        phase=phase_title,
+                        cached=True,
+                        prompt=self._truncate_prompt(prompt),
                     )
                 )
                 self._emit(
@@ -187,7 +192,12 @@ class WorkflowRuntime:
 
         async with self._semaphore:
             self._emit(
-                AgentStartedEvent(agent_id=agent_id, label=display, phase=phase_title)
+                AgentStartedEvent(
+                    agent_id=agent_id,
+                    label=display,
+                    phase=phase_title,
+                    prompt=self._truncate_prompt(prompt),
+                )
             )
             started = time.monotonic()
             try:
@@ -406,6 +416,12 @@ class WorkflowRuntime:
             raise WorkflowScriptError(
                 f"{name}() accepts at most {MAX_FANOUT_ITEMS} items, got {count}"
             )
+
+    @staticmethod
+    def _truncate_prompt(prompt: str) -> str:
+        if len(prompt) > _PROMPT_EVENT_MAX_LEN:
+            return prompt[: _PROMPT_EVENT_MAX_LEN - 1] + "…"
+        return prompt
 
     @staticmethod
     def _truncate_label(prompt: str) -> str:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 from textual import events
 from textual.app import ComposeResult
@@ -20,11 +20,14 @@ _MAX_LOG_LINES = 3
 _KEEP_FINISHED_ROWS_PER_PHASE = 6
 _PROGRESS_MAX_LEN = 48
 _MAX_ACTIVITY_LINES = 50
+_MAX_ACTIVITY_LOG = 500
 _RUNNING_ACTIVITY_TAIL = 2
 
 
 class WorkflowAgentRow(ClickWithoutDragMixin, StatusMessage):
-    def __init__(self, label: str) -> None:
+    def __init__(
+        self, label: str, *, prompt: str | None = None, phase: str | None = None
+    ) -> None:
         self._label = label
         self._detail = ""
         self._activity: Vertical | None = None
@@ -33,6 +36,10 @@ class WorkflowAgentRow(ClickWithoutDragMixin, StatusMessage):
         super().__init__()
         self.add_class("workflow-agent-row")
         self.finished = False
+        self.prompt = prompt
+        self.phase_title = phase
+        self.status_detail: str | None = None
+        self.activity_log: list[str] = []
 
     def compose(self) -> ComposeResult:
         with Horizontal(classes="workflow-agent-header"):
@@ -55,6 +62,9 @@ class WorkflowAgentRow(ClickWithoutDragMixin, StatusMessage):
         return f"{marker}{self._label}"
 
     async def add_activity(self, message: str) -> None:
+        self.activity_log.append(message)
+        if len(self.activity_log) > _MAX_ACTIVITY_LOG:
+            self.activity_log.pop(0)
         self._detail = (
             message
             if len(message) <= _PROGRESS_MAX_LEN
@@ -114,6 +124,7 @@ class WorkflowAgentRow(ClickWithoutDragMixin, StatusMessage):
             self._detail = f"{duration_s:.0f}s"
         else:
             self._detail = ""
+        self.status_detail = detail
         match status:
             case AgentRunStatus.OK:
                 self.settle(IndicatorState.SUCCESS)
@@ -165,6 +176,8 @@ class WorkflowPhaseGroup(Vertical):
 
 
 class WorkflowCallMessage(ToolCallMessage):
+    instances: ClassVar[list[WorkflowCallMessage]] = []
+
     def __init__(self, event: Any = None, **kwargs: Any) -> None:
         self._tree: Vertical | None = None
         self._logs: Vertical | None = None
@@ -175,6 +188,15 @@ class WorkflowCallMessage(ToolCallMessage):
         self._agents_finished = 0
         super().__init__(event, **kwargs)
         self.add_class("workflow-call")
+        WorkflowCallMessage.instances.append(self)
+
+    @property
+    def agent_rows(self) -> dict[int, WorkflowAgentRow]:
+        return self._agents
+
+    @property
+    def phase_order(self) -> list[str | None]:
+        return list(self._phases.keys())
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="tool-call-container"):
@@ -202,7 +224,10 @@ class WorkflowCallMessage(ToolCallMessage):
     def get_content_suffix(self) -> str:
         if not self._agents_total:
             return ""
-        return f"{self._agents_finished}/{self._agents_total} agents"
+        counts = f"{self._agents_finished}/{self._agents_total} agents"
+        if self._is_spinning:
+            return f"{counts} · ctrl+w inspect"
+        return counts
 
     def settle(self, state: IndicatorState) -> None:
         for row in self._agents.values():
@@ -240,7 +265,7 @@ class WorkflowCallMessage(ToolCallMessage):
         agent_id = data["agent_id"]
         phase = data.get("phase")
         group = await self._ensure_phase(phase)
-        row = WorkflowAgentRow(data["label"])
+        row = WorkflowAgentRow(data["label"], prompt=data.get("prompt"), phase=phase)
         self._agents[agent_id] = row
         self._agent_phase[agent_id] = phase
         self._agents_total += 1

@@ -862,6 +862,69 @@ StatusMessage {
     }
 }
 
+WorkflowInspectorScreen {
+    align: center middle;
+    background: $background 60%;
+}
+
+#workflow-inspector {
+    width: 90%;
+    height: 80%;
+    background: $surface;
+    border: round $primary;
+    padding: 1 2;
+}
+
+#workflow-inspector-title {
+    width: 100%;
+    height: auto;
+    color: $text-muted;
+    margin-bottom: 1;
+}
+
+#workflow-inspector-body {
+    width: 100%;
+    height: 1fr;
+}
+
+#workflow-inspector-tree {
+    width: 40%;
+    height: 100%;
+    border-right: solid $panel;
+    padding-right: 1;
+}
+
+#workflow-inspector-detail {
+    width: 60%;
+    height: 100%;
+    padding: 0 0 0 2;
+}
+
+.workflow-inspector-header {
+    width: 100%;
+    height: auto;
+    margin-bottom: 1;
+}
+
+.workflow-inspector-section {
+    width: 100%;
+    height: auto;
+    color: $primary;
+    margin: 1 0 0 0;
+}
+
+.workflow-inspector-prompt {
+    width: 100%;
+    height: auto;
+    color: $foreground;
+}
+
+.workflow-inspector-activity {
+    width: 100%;
+    height: auto;
+    color: $text-muted;
+}
+
 .tool-result {
     width: 100%;
     height: auto;

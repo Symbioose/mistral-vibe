@@ -18,6 +18,7 @@ class AgentStartedEvent(BaseModel):
     label: str
     phase: str | None = None
     cached: bool = False
+    prompt: str | None = None
 
 
 class AgentProgressEvent(BaseModel):
