@@ -73,7 +73,7 @@ class WorkflowArgs(BaseModel):
             "Self-contained async Python workflow script starting with a "
             "`meta = {...}` literal. Hard limit 10000 chars / 200 lines: keep it "
             "short mechanical code — every prose agent brief goes in `prompts`, "
-            "referenced as prompts[\"key\"]"
+            'referenced as prompts["key"]'
         ),
     )
     script_path: str | None = Field(

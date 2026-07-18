@@ -33,7 +33,11 @@ from vibe.core.workflows.script import (
     ParsedScript,
     build_script_globals,
 )
-from vibe.core.workflows.structured import parse_structured, schema_prompt_suffix
+from vibe.core.workflows.structured import (
+    check_schema_valid,
+    parse_structured,
+    schema_prompt_suffix,
+)
 
 DEFAULT_MAX_AGENTS = 1000
 MAX_FANOUT_ITEMS = 4096
@@ -186,6 +190,7 @@ class WorkflowRuntime:
                         label=display,
                         status=AgentRunStatus.OK,
                         cached=True,
+                        output=self._preview(cached),
                     )
                 )
                 return cached
@@ -221,6 +226,7 @@ class WorkflowRuntime:
                 status=run_status,
                 duration_s=time.monotonic() - started,
                 detail=detail,
+                output=self._preview(result),
             )
         )
         if run_status is AgentRunStatus.OK and self._journal is not None:
@@ -402,13 +408,22 @@ class WorkflowRuntime:
     @staticmethod
     def _check_schema(schema: Any) -> None:
         if not isinstance(schema, dict):
-            raise WorkflowScriptError("agent() schema must be a JSON Schema dict")
+            raise WorkflowScriptError(
+                "agent() schema must be a JSON Schema dict, e.g. "
+                '{"type": "object", "properties": {"summary": {"type": "string"}}}'
+            )
         try:
             json.dumps(schema)
         except (TypeError, ValueError) as e:
             raise WorkflowScriptError(
-                f"agent() schema must be JSON-serializable: {e}"
+                "agent() schema must be JSON-serializable — use "
+                '{"type": "string"} style, never Python types like str'
             ) from e
+        schema_error = check_schema_valid(schema)
+        if schema_error is not None:
+            raise WorkflowScriptError(
+                f"agent() schema is not a valid JSON Schema: {schema_error}"
+            )
 
     @staticmethod
     def _check_fanout(count: int, name: str) -> None:
@@ -416,6 +431,17 @@ class WorkflowRuntime:
             raise WorkflowScriptError(
                 f"{name}() accepts at most {MAX_FANOUT_ITEMS} items, got {count}"
             )
+
+    @staticmethod
+    def _preview(value: Any) -> str | None:
+        if value is None:
+            return None
+        text = (
+            value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+        )
+        if len(text) > _PROMPT_EVENT_MAX_LEN:
+            return text[: _PROMPT_EVENT_MAX_LEN - 1] + "…"
+        return text
 
     @staticmethod
     def _truncate_prompt(prompt: str) -> str:
@@ -439,6 +465,18 @@ class WorkflowRuntime:
             last = script_frames[-1]
             location = f" (script line {last.lineno})"
         message = f"{type(e).__name__}: {e}{location}"
+        if script_frames:
+            source_lines = self._script.source.splitlines()
+            lineno = script_frames[-1].lineno
+            if lineno is not None and 1 <= lineno <= len(source_lines):
+                message += f"\n  offending line: {source_lines[lineno - 1].strip()!r}"
+        if isinstance(e, KeyError) and e.args:
+            key = e.args[0]
+            if isinstance(key, str) and ('"' in key or "'" in key):
+                message += (
+                    f"\n  The missing key {key!r} contains literal quote "
+                    'characters — you wrote x[\'"key"\'] instead of x["key"].'
+                )
         if isinstance(e, (KeyError, TypeError, AttributeError, IndexError)):
             message += (
                 "\nThis usually means the script indexed into an agent result "

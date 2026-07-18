@@ -9,6 +9,15 @@ import jsonschema
 _FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
 
+def check_schema_valid(schema: dict[str, Any]) -> str | None:
+    validator = jsonschema.validators.validator_for(schema)
+    try:
+        validator.check_schema(schema)
+    except jsonschema.SchemaError as e:
+        return e.message
+    return None
+
+
 def schema_prompt_suffix(schema: dict[str, Any]) -> str:
     return (
         "\n\nReturn ONLY a JSON value matching this JSON Schema "

@@ -5,6 +5,7 @@ from typing import Any, ClassVar
 from textual import events
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.message import Message
 
 from vibe.cli.textual_ui.widgets.collapsible import ClickWithoutDragMixin
 from vibe.cli.textual_ui.widgets.links import LinkStatic
@@ -25,6 +26,11 @@ _RUNNING_ACTIVITY_TAIL = 2
 
 
 class WorkflowAgentRow(ClickWithoutDragMixin, StatusMessage):
+    class Clicked(Message):
+        def __init__(self, row: WorkflowAgentRow) -> None:
+            super().__init__()
+            self.row = row
+
     def __init__(
         self, label: str, *, prompt: str | None = None, phase: str | None = None
     ) -> None:
@@ -32,13 +38,13 @@ class WorkflowAgentRow(ClickWithoutDragMixin, StatusMessage):
         self._detail = ""
         self._activity: Vertical | None = None
         self._activity_count = 0
-        self._expanded = False
         super().__init__()
         self.add_class("workflow-agent-row")
         self.finished = False
         self.prompt = prompt
         self.phase_title = phase
         self.status_detail: str | None = None
+        self.output: str | None = None
         self.activity_log: list[str] = []
 
     def compose(self) -> ComposeResult:
@@ -54,9 +60,7 @@ class WorkflowAgentRow(ClickWithoutDragMixin, StatusMessage):
         yield self._activity
 
     def get_content(self) -> str:
-        marker = ""
-        if self._activity_count:
-            marker = "▾ " if self._expanded else "▸ "
+        marker = "▸ " if self._activity_count else ""
         if self._detail:
             return f"{marker}{self._label} · {self._detail}"
         return f"{marker}{self._label}"
@@ -86,22 +90,16 @@ class WorkflowAgentRow(ClickWithoutDragMixin, StatusMessage):
         if self._activity is None:
             return
         children = list(self._activity.children)
-        if self._expanded:
-            visible = len(children)
-        elif not self.finished:
-            visible = min(_RUNNING_ACTIVITY_TAIL, len(children))
-        else:
-            visible = 0
+        visible = min(_RUNNING_ACTIVITY_TAIL, len(children)) if not self.finished else 0
         for index, child in enumerate(children):
             child.display = index >= len(children) - visible
         self._activity.display = visible > 0
 
     async def on_click(self, event: events.Click) -> None:
-        if self._click_is_passive(event) or not self._activity_count:
+        if self._click_is_passive(event):
             return
-        self._expanded = not self._expanded
-        self._refresh_activity()
-        self.update_display()
+        event.stop()
+        self.post_message(self.Clicked(self))
 
     def finish(
         self,
@@ -176,6 +174,14 @@ class WorkflowPhaseGroup(Vertical):
 
 
 class WorkflowCallMessage(ToolCallMessage):
+    class InspectRequested(Message):
+        def __init__(
+            self, workflow: WorkflowCallMessage, agent_id: int | None = None
+        ) -> None:
+            super().__init__()
+            self.workflow = workflow
+            self.agent_id = agent_id
+
     instances: ClassVar[list[WorkflowCallMessage]] = []
 
     def __init__(self, event: Any = None, **kwargs: Any) -> None:
@@ -197,6 +203,15 @@ class WorkflowCallMessage(ToolCallMessage):
     @property
     def phase_order(self) -> list[str | None]:
         return list(self._phases.keys())
+
+    def on_workflow_agent_row_clicked(self, message: WorkflowAgentRow.Clicked) -> None:
+        agent_id = next(
+            (i for i, row in self._agents.items() if row is message.row), None
+        )
+        self.post_message(self.InspectRequested(self, agent_id))
+
+    async def on_click(self, _event: events.Click) -> None:
+        self.post_message(self.InspectRequested(self, None))
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="tool-call-container"):
@@ -278,6 +293,7 @@ class WorkflowCallMessage(ToolCallMessage):
         if row is None:
             return
         self._agents_finished += 1
+        row.output = data.get("output")
         row.finish(
             data.get("status", AgentRunStatus.OK),
             cached=data.get("cached", False),

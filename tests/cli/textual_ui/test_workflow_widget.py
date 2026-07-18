@@ -125,16 +125,51 @@ async def test_activity_tail_visible_while_running_hidden_after() -> None:
         visible = [c for c in activity.children if c.display]
         assert len(visible) == 2
         assert str(visible[-1].render()) == "▸ step 3"
+        assert row.activity_log == [f"▸ step {i}" for i in range(4)]
 
         await widget.handle_workflow_event(_finished(1))
         await pilot.pause()
         assert activity.display is False
 
-        row._expanded = True
-        row._refresh_activity()
-        visible = [c for c in activity.children if c.display]
-        assert len(visible) == 4
-        assert activity.display is True
+
+@pytest.mark.asyncio
+async def test_row_click_requests_inspection() -> None:
+    app = _Harness()
+    async with app.run_test() as pilot:
+        widget = WorkflowCallMessage(tool_name="workflow")
+        await app.mount(widget)
+        await widget.handle_workflow_event(_started(7, "clicky"))
+        await pilot.pause()
+
+        requests: list[WorkflowCallMessage.InspectRequested] = []
+        original_post = widget.post_message
+
+        def capture(message: object) -> bool:
+            if isinstance(message, WorkflowCallMessage.InspectRequested):
+                requests.append(message)
+                return True
+            return original_post(message)
+
+        widget.post_message = capture  # type: ignore[method-assign]
+        row = widget.agent_rows[7]
+        widget.on_workflow_agent_row_clicked(WorkflowAgentRow.Clicked(row))
+        assert len(requests) == 1
+        assert requests[0].agent_id == 7
+        assert requests[0].workflow is widget
+
+
+@pytest.mark.asyncio
+async def test_finished_agent_records_output() -> None:
+    app = _Harness()
+    async with app.run_test() as pilot:
+        widget = WorkflowCallMessage(tool_name="workflow")
+        await app.mount(widget)
+        await widget.handle_workflow_event(_started(1, "worker"))
+        await widget.handle_workflow_event(
+            _finished(1, "ok", output='{"summary": "all good"}')
+        )
+        await pilot.pause()
+        assert widget.agent_rows[1].output == '{"summary": "all good"}'
 
 
 @pytest.mark.asyncio

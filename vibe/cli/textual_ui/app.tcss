@@ -913,16 +913,14 @@ WorkflowInspectorScreen {
     margin: 1 0 0 0;
 }
 
-.workflow-inspector-prompt {
+.workflow-inspector-body-text {
     width: 100%;
     height: auto;
     color: $foreground;
 }
 
-.workflow-inspector-activity {
-    width: 100%;
-    height: auto;
-    color: $text-muted;
+.workflow-call:hover .status-indicator-text {
+    text-style: underline;
 }
 
 .tool-result {

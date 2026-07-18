@@ -280,6 +280,7 @@ if TYPE_CHECKING:
     from vibe.cli.textual_ui.widgets.connector_auth_app import ConnectorAuthApp
     from vibe.cli.textual_ui.widgets.mcp_app import MCPApp
     from vibe.cli.textual_ui.widgets.mcp_oauth_app import MCPOAuthApp
+    from vibe.cli.textual_ui.widgets.workflow import WorkflowCallMessage
     from vibe.core.agent_loop import AgentLoop
 
 
@@ -4066,6 +4067,19 @@ class VibeApp(App):  # noqa: PLR0904
             self.notify("No workflow in this session yet", severity="information")
             return
         self.push_screen(WorkflowInspectorScreen(candidates[-1]))
+
+    def on_workflow_call_message_inspect_requested(
+        self, message: WorkflowCallMessage.InspectRequested
+    ) -> None:
+        from vibe.cli.textual_ui.widgets.workflow_inspector import (
+            WorkflowInspectorScreen,
+        )
+
+        if isinstance(self.screen, WorkflowInspectorScreen):
+            return
+        self.push_screen(
+            WorkflowInspectorScreen(message.workflow, initial_agent=message.agent_id)
+        )
 
     async def on_history_load_more_requested(self, _: HistoryLoadMoreRequested) -> None:
         self._load_more.set_enabled(False)

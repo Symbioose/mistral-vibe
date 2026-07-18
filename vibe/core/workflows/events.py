@@ -35,6 +35,7 @@ class AgentFinishedEvent(BaseModel):
     cached: bool = False
     duration_s: float | None = None
     detail: str | None = None
+    output: str | None = None
 
 
 class WorkflowLogEvent(BaseModel):
