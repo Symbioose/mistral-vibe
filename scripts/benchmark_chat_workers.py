@@ -51,12 +51,12 @@ SOLO_BRIEF = (
 )
 
 
-def generate_project(out: Path, dup: bool) -> None:
+def generate_project(out: Path, copies: int) -> None:
     script = Path(__file__).parent / "demo_chat_corpus.py"
-    cmd = [sys.executable, str(script), "--out", str(out)]
-    if dup:
-        cmd.append("--dup")
-    subprocess.run(cmd, check=True)
+    subprocess.run(
+        [sys.executable, str(script), "--out", str(out), "--copies", str(copies)],
+        check=True,
+    )
 
 
 def run_tests(project: Path) -> tuple[int, int]:
@@ -185,7 +185,7 @@ async def bench_workers(project: Path, config: VibeConfig) -> dict[str, Any]:
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="bench_chat")
-    parser.add_argument("--dup", action="store_true")
+    parser.add_argument("--copies", type=int, default=1)
     parsed = parser.parse_args()
     out_dir = Path(parsed.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -194,14 +194,14 @@ async def main() -> None:
     results: list[dict[str, Any]] = []
 
     solo_project = out_dir / "solo" / "project"
-    generate_project(solo_project, parsed.dup)
+    generate_project(solo_project, parsed.copies)
     baseline_passed, baseline_total = run_tests(solo_project)
     print(f"etat initial: {baseline_passed}/{baseline_total} tests verts", flush=True)
     results.append(await bench_solo(solo_project, config))
     print(json.dumps(results[-1]), flush=True)
 
     workers_project = out_dir / "workers" / "project"
-    generate_project(workers_project, parsed.dup)
+    generate_project(workers_project, parsed.copies)
     results.append(await bench_workers(workers_project, config))
     print(json.dumps(results[-1]), flush=True)
 

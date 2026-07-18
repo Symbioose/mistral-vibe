@@ -199,19 +199,21 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True)
     parser.add_argument("--no-agents", action="store_true")
-    parser.add_argument("--dup", action="store_true")
+    parser.add_argument("--copies", type=int, default=1)
     parsed = parser.parse_args()
     out = Path(parsed.out)
     if out.exists():
         shutil.rmtree(out, onexc=_force_remove)
     (out / "tests").mkdir(parents=True)
     files = dict(FILES)
-    if parsed.dup:
+    suffixes = "bcdefghij"
+    for copy_index in range(1, max(1, parsed.copies)):
+        suffix = suffixes[copy_index - 1]
         for module in ("geometry", "text_tools", "sequences"):
-            files[f"{module}_b.py"] = files[f"{module}.py"]
-            files[f"tests/test_{module}_b.py"] = files[
+            files[f"{module}_{suffix}.py"] = files[f"{module}.py"]
+            files[f"tests/test_{module}_{suffix}.py"] = files[
                 f"tests/test_{module}.py"
-            ].replace(f"from {module} import", f"from {module}_b import")
+            ].replace(f"from {module} import", f"from {module}_{suffix} import")
     for rel, content in files.items():
         if parsed.no_agents and rel == "AGENTS.md":
             continue
