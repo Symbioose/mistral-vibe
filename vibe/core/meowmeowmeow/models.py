@@ -6,7 +6,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class MiouMiouMiouPhaseMeta(BaseModel):
+class MeowMeowMeowPhaseMeta(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     title: str = Field(min_length=1, max_length=80)
@@ -14,13 +14,13 @@ class MiouMiouMiouPhaseMeta(BaseModel):
     model: str | None = None
 
 
-class MiouMiouMiouMeta(BaseModel):
+class MeowMeowMeowMeta(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     name: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]*$", max_length=64)
     description: str = Field(min_length=1, max_length=200)
     when_to_use: str | None = Field(default=None, alias="whenToUse")
-    phases: list[MiouMiouMiouPhaseMeta] = Field(default_factory=list)
+    phases: list[MeowMeowMeowPhaseMeta] = Field(default_factory=list)
 
 
 class AgentRunStatus(StrEnum):
@@ -29,7 +29,7 @@ class AgentRunStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
-class MiouMiouMiouStatus(StrEnum):
+class MeowMeowMeowStatus(StrEnum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -48,8 +48,8 @@ class SubagentOutcome(BaseModel):
     turns_used: int = 0
 
 
-class MiouMiouMiouRunOutcome(BaseModel):
-    status: MiouMiouMiouStatus
+class MeowMeowMeowRunOutcome(BaseModel):
+    status: MeowMeowMeowStatus
     value: Any = None
     error: str | None = None
     agents_spawned: int = 0

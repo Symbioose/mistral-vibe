@@ -4,10 +4,10 @@ import pytest
 from textual.widget import Widget
 
 from vibe.cli.textual_ui.handlers.event_handler import EventHandler
-from vibe.cli.textual_ui.widgets.miou_miou_miou import MiouMiouMiouCallMessage
+from vibe.cli.textual_ui.widgets.meow_meow_meow import MeowMeowMeowCallMessage
 from vibe.cli.textual_ui.widgets.tools import ToolCallMessage
 from vibe.core.tools.builtins.bash import Bash
-from vibe.core.tools.builtins.miou_miou_miou import MiouMiouMiou
+from vibe.core.tools.builtins.meow_meow_meow import MeowMeowMeow
 from vibe.core.types import ToolCallEvent, ToolStreamEvent
 
 
@@ -21,14 +21,14 @@ def make_handler(mounted: list[Widget]) -> EventHandler:
 
 
 @pytest.mark.asyncio
-async def test_miou_miou_miou_tool_call_gets_miou_miou_miou_widget() -> None:
+async def test_meow_meow_meow_tool_call_gets_meow_meow_meow_widget() -> None:
     mounted: list[Widget] = []
     handler = make_handler(mounted)
     event = ToolCallEvent(
-        tool_call_id="tc1", tool_name="miou_miou_miou", tool_class=MiouMiouMiou
+        tool_call_id="tc1", tool_name="meow_meow_meow", tool_class=MeowMeowMeow
     )
     widget = await handler.handle_event(event)
-    assert isinstance(widget, MiouMiouMiouCallMessage)
+    assert isinstance(widget, MeowMeowMeowCallMessage)
     assert mounted == [widget]
 
 
@@ -42,24 +42,24 @@ async def test_other_tool_call_gets_generic_widget() -> None:
 
 
 @pytest.mark.asyncio
-async def test_stream_event_with_data_routes_to_miou_miou_miou_widget() -> None:
+async def test_stream_event_with_data_routes_to_meow_meow_meow_widget() -> None:
     mounted: list[Widget] = []
     handler = make_handler(mounted)
     call_event = ToolCallEvent(
-        tool_call_id="tc1", tool_name="miou_miou_miou", tool_class=MiouMiouMiou
+        tool_call_id="tc1", tool_name="meow_meow_meow", tool_class=MeowMeowMeow
     )
     widget = await handler.handle_event(call_event)
-    assert isinstance(widget, MiouMiouMiouCallMessage)
+    assert isinstance(widget, MeowMeowMeowCallMessage)
 
     seen: list[dict] = []
 
     async def record(data: dict) -> None:
         seen.append(data)
 
-    widget.handle_miou_miou_miou_event = record  # type: ignore[method-assign]
+    widget.handle_meow_meow_meow_event = record  # type: ignore[method-assign]
     stream = ToolStreamEvent(
         tool_call_id="tc1",
-        tool_name="miou_miou_miou",
+        tool_name="meow_meow_meow",
         message="Phase: Scan",
         data={"kind": "phase_started", "title": "Scan"},
     )

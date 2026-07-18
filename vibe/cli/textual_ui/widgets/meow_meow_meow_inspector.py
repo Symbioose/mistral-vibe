@@ -9,9 +9,9 @@ from textual.screen import ModalScreen
 from textual.widgets import Static, Tree
 from textual.widgets.tree import TreeNode
 
-from vibe.cli.textual_ui.widgets.miou_miou_miou import (
-    MiouMiouMiouAgentRow,
-    MiouMiouMiouCallMessage,
+from vibe.cli.textual_ui.widgets.meow_meow_meow import (
+    MeowMeowMeowAgentRow,
+    MeowMeowMeowCallMessage,
 )
 from vibe.cli.textual_ui.widgets.no_markup_static import NoMarkupStatic
 from vibe.cli.textual_ui.widgets.status_message import IndicatorState
@@ -25,7 +25,7 @@ _STATE_GLYPHS = {
 }
 
 
-class MiouMiouMiouInspectorScreen(ModalScreen[None]):
+class MeowMeowMeowInspectorScreen(ModalScreen[None]):
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "dismiss_inspector", "Close", priority=True),
         Binding("q", "dismiss_inspector", "Close", show=False),
@@ -34,10 +34,10 @@ class MiouMiouMiouInspectorScreen(ModalScreen[None]):
     ]
 
     def __init__(
-        self, miou_miou_miou: MiouMiouMiouCallMessage, initial_agent: int | None = None
+        self, meow_meow_meow: MeowMeowMeowCallMessage, initial_agent: int | None = None
     ) -> None:
         super().__init__()
-        self._miou_miou_miou = miou_miou_miou
+        self._meow_meow_meow = meow_meow_meow
         self._initial_agent = initial_agent
         self._follow = initial_agent is None
         self._tree: Tree[int] | None = None
@@ -51,15 +51,15 @@ class MiouMiouMiouInspectorScreen(ModalScreen[None]):
         self._expected_selection: int | None = None
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="miou_miou_miou-inspector"):
-            self._title = NoMarkupStatic("", id="miou_miou_miou-inspector-title")
+        with Vertical(id="meow_meow_meow-inspector"):
+            self._title = NoMarkupStatic("", id="meow_meow_meow-inspector-title")
             yield self._title
-            with Horizontal(id="miou_miou_miou-inspector-body"):
-                self._tree = Tree("miou_miou_miou", id="miou_miou_miou-inspector-tree")
+            with Horizontal(id="meow_meow_meow-inspector-body"):
+                self._tree = Tree("meow_meow_meow", id="meow_meow_meow-inspector-tree")
                 self._tree.show_root = False
                 self._tree.guide_depth = 2
                 yield self._tree
-                self._detail = VerticalScroll(id="miou_miou_miou-inspector-detail")
+                self._detail = VerticalScroll(id="meow_meow_meow-inspector-detail")
                 yield self._detail
 
     def on_mount(self) -> None:
@@ -94,19 +94,19 @@ class MiouMiouMiouInspectorScreen(ModalScreen[None]):
             self._refresh_detail()
         self._tree.select_node(node)
 
-    def _row_glyph(self, row: MiouMiouMiouAgentRow) -> str:
+    def _row_glyph(self, row: MeowMeowMeowAgentRow) -> str:
         if not row.finished:
             return "◐"
         return _STATE_GLYPHS.get(row.indicator_state, "·")
 
-    def _node_label(self, row: MiouMiouMiouAgentRow) -> str:
+    def _node_label(self, row: MeowMeowMeowAgentRow) -> str:
         return f"{self._row_glyph(row)} {row.get_content().lstrip('▸ ')}"
 
     def _phase_label(self, phase: str | None) -> str:
         title = phase if phase is not None else "(no phase)"
         rows = [
             r
-            for r in self._miou_miou_miou.agent_rows.values()
+            for r in self._meow_meow_meow.agent_rows.values()
             if r.phase_title == phase
         ]
         done = sum(r.finished for r in rows)
@@ -115,25 +115,25 @@ class MiouMiouMiouInspectorScreen(ModalScreen[None]):
     def _update_title(self) -> None:
         if self._title is None:
             return
-        rows = self._miou_miou_miou.agent_rows
+        rows = self._meow_meow_meow.agent_rows
         done = sum(r.finished for r in rows.values())
         follow = "on" if self._follow else "off"
         self._title.update(
-            f"MiouMiouMiou inspector — {done}/{len(rows)} agents · "
+            f"MeowMeowMeow inspector — {done}/{len(rows)} agents · "
             f"↑/↓ navigate · f follow: {follow} · esc close"
         )
 
     def _sync(self) -> None:
         if self._tree is None:
             return
-        for phase in self._miou_miou_miou.phase_order:
+        for phase in self._meow_meow_meow.phase_order:
             if phase not in self._phase_nodes:
                 self._phase_nodes[phase] = self._tree.root.add(
                     self._phase_label(phase), expand=True
                 )
         for phase, node in self._phase_nodes.items():
             node.set_label(self._phase_label(phase))
-        for agent_id, row in self._miou_miou_miou.agent_rows.items():
+        for agent_id, row in self._meow_meow_meow.agent_rows.items():
             node = self._agent_nodes.get(agent_id)
             if node is None:
                 parent = self._phase_nodes.get(row.phase_title)
@@ -154,7 +154,7 @@ class MiouMiouMiouInspectorScreen(ModalScreen[None]):
     def _follow_latest(self) -> None:
         running = [
             agent_id
-            for agent_id, row in self._miou_miou_miou.agent_rows.items()
+            for agent_id, row in self._meow_meow_meow.agent_rows.items()
             if not row.finished
         ]
         target_id = max(running) if running else max(self._agent_nodes, default=None)
@@ -179,7 +179,7 @@ class MiouMiouMiouInspectorScreen(ModalScreen[None]):
     def _refresh_detail(self) -> None:
         if self._detail is None or self._selected_agent is None:
             return
-        row = self._miou_miou_miou.agent_rows.get(self._selected_agent)
+        row = self._meow_meow_meow.agent_rows.get(self._selected_agent)
         if row is None:
             return
         unchanged = (
@@ -194,7 +194,7 @@ class MiouMiouMiouInspectorScreen(ModalScreen[None]):
         header = f"{self._row_glyph(row)} {row.get_content().lstrip('▸ ')}"
         if row.status_detail:
             header += f"\n{row.status_detail}"
-        self._detail.mount(Static(header, classes="miou_miou_miou-inspector-header"))
+        self._detail.mount(Static(header, classes="meow_meow_meow-inspector-header"))
         self._mount_section("prompt", row.prompt or "(prompt unavailable)")
         activity = (
             "\n".join(row.activity_log) if row.activity_log else "(no activity yet)"
@@ -207,8 +207,8 @@ class MiouMiouMiouInspectorScreen(ModalScreen[None]):
         if self._detail is None:
             return
         self._detail.mount(
-            NoMarkupStatic(f"── {title} ──", classes="miou_miou_miou-inspector-section")
+            NoMarkupStatic(f"── {title} ──", classes="meow_meow_meow-inspector-section")
         )
         self._detail.mount(
-            NoMarkupStatic(body, classes="miou_miou_miou-inspector-body-text")
+            NoMarkupStatic(body, classes="meow_meow_meow-inspector-body-text")
         )

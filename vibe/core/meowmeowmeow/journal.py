@@ -23,14 +23,14 @@ def journal_key(
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-class MiouMiouMiouJournal:
+class MeowMeowMeowJournal:
     def __init__(self, path: Path, replay: dict[str, deque[Any]] | None = None) -> None:
         self._path = path
         self._replay = replay or {}
         path.parent.mkdir(parents=True, exist_ok=True)
 
     @classmethod
-    def create(cls, path: Path, resume_from: Path | None = None) -> MiouMiouMiouJournal:
+    def create(cls, path: Path, resume_from: Path | None = None) -> MeowMeowMeowJournal:
         replay: dict[str, deque[Any]] = {}
         if resume_from is not None and resume_from.exists():
             for line in resume_from.read_text(encoding="utf-8").splitlines():
@@ -41,7 +41,7 @@ class MiouMiouMiouJournal:
                     entry = json.loads(line)
                 except json.JSONDecodeError:
                     logger.warning(
-                        "Skipping corrupt miou_miou_miou journal line in %s",
+                        "Skipping corrupt meow_meow_meow journal line in %s",
                         resume_from,
                     )
                     continue

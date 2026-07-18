@@ -14,23 +14,23 @@ from pydantic import BaseModel, Field
 from vibe.core.agents.models import AgentType, BuiltinAgentName
 from vibe.core.config import SessionLoggingConfig, VibeConfig
 from vibe.core.logger import logger
-from vibe.core.mioumioumiou.errors import MiouMiouMiouScriptError
-from vibe.core.mioumioumiou.events import (
+from vibe.core.meowmeowmeow.errors import MeowMeowMeowScriptError
+from vibe.core.meowmeowmeow.events import (
     AgentFinishedEvent,
     AgentStartedEvent,
-    MiouMiouMiouEvent,
-    MiouMiouMiouLogEvent,
+    MeowMeowMeowEvent,
+    MeowMeowMeowLogEvent,
     PhaseStartedEvent,
 )
-from vibe.core.mioumioumiou.journal import MiouMiouMiouJournal
-from vibe.core.mioumioumiou.models import (
+from vibe.core.meowmeowmeow.journal import MeowMeowMeowJournal
+from vibe.core.meowmeowmeow.models import (
     AgentRunStatus,
-    MiouMiouMiouStatus,
+    MeowMeowMeowStatus,
     SubagentOutcome,
     SubagentRequest,
 )
-from vibe.core.mioumioumiou.runtime import MiouMiouMiouRuntime
-from vibe.core.mioumioumiou.script import parse_miou_miou_miou_script
+from vibe.core.meowmeowmeow.runtime import MeowMeowMeowRuntime
+from vibe.core.meowmeowmeow.script import ParsedScript, parse_meow_meow_meow_script
 from vibe.core.tools.base import (
     BaseTool,
     BaseToolConfig,
@@ -58,19 +58,19 @@ if TYPE_CHECKING:
 
 _MAX_RESULT_CHARS = 40_000
 _SUBAGENT_PREAMBLE = (
-    "You are a subagent inside a deterministic miou_miou_miou. Your final message IS "
-    "the miou_miou_miou's data — it is consumed by a script, not read by a human. "
+    "You are a subagent inside a deterministic meow_meow_meow. Your final message IS "
+    "the meow_meow_meow's data — it is consumed by a script, not read by a human. "
     "Return raw findings/data only: no preamble, no summary of what you did, "
     "no offers to help further.\n\n"
 )
 
 
-class MiouMiouMiouArgs(BaseModel):
+class MeowMeowMeowArgs(BaseModel):
     script: str | None = Field(
         default=None,
         max_length=10_000,
         description=(
-            "Self-contained async Python miou_miou_miou script starting with a "
+            "Self-contained async Python meow_meow_meow script starting with a "
             "`meta = {...}` literal. Hard limit 10000 chars / 200 lines: keep it "
             "short mechanical code — every prose agent brief goes in `prompts`, "
             'referenced as prompts["key"]'
@@ -78,7 +78,7 @@ class MiouMiouMiouArgs(BaseModel):
     )
     script_path: str | None = Field(
         default=None,
-        description="Path to a miou_miou_miou script file on disk; takes precedence over `script`",
+        description="Path to a meow_meow_meow script file on disk; takes precedence over `script`",
     )
     args: Any = Field(
         default=None,
@@ -90,14 +90,14 @@ class MiouMiouMiouArgs(BaseModel):
     )
     resume_from_run_id: str | None = Field(
         default=None,
-        description="Run ID of a prior miou_miou_miou invocation to resume from; successful agent() calls with unchanged (prompt, opts) replay instantly",
+        description="Run ID of a prior meow_meow_meow invocation to resume from; successful agent() calls with unchanged (prompt, opts) replay instantly",
     )
 
 
-class MiouMiouMiouResult(BaseModel):
+class MeowMeowMeowResult(BaseModel):
     run_id: str
     name: str
-    status: MiouMiouMiouStatus
+    status: MeowMeowMeowStatus
     result: Any = None
     error: str | None = None
     agents_spawned: int = 0
@@ -105,7 +105,7 @@ class MiouMiouMiouResult(BaseModel):
     duration_s: float = 0.0
 
 
-class MiouMiouMiouToolConfig(BaseToolConfig):
+class MeowMeowMeowToolConfig(BaseToolConfig):
     permission: ToolPermission = ToolPermission.ASK
     default_agent: str = BuiltinAgentName.EXPLORE
     max_concurrency: int | None = None
@@ -114,7 +114,7 @@ class MiouMiouMiouToolConfig(BaseToolConfig):
 
 
 class _AgentLoopSpawner:
-    def __init__(self, ctx: InvokeContext, config: MiouMiouMiouToolConfig) -> None:
+    def __init__(self, ctx: InvokeContext, config: MeowMeowMeowToolConfig) -> None:
         self._ctx = ctx
         self._config = config
 
@@ -129,7 +129,7 @@ class _AgentLoopSpawner:
         ctx = self._ctx
         if not ctx.agent_manager:
             return SubagentOutcome(
-                success=False, error="miou_miou_miou requires agent_manager in context"
+                success=False, error="meow_meow_meow requires agent_manager in context"
             )
         try:
             profile = ctx.agent_manager.get_agent(agent_name)
@@ -138,12 +138,12 @@ class _AgentLoopSpawner:
         if profile.agent_type != AgentType.SUBAGENT:
             return SubagentOutcome(
                 success=False,
-                error=f"agent '{agent_name}' is not a subagent; only subagents can run inside mioumioumiou",
+                error=f"agent '{agent_name}' is not a subagent; only subagents can run inside meowmeowmeow",
             )
 
         session_logging = SessionLoggingConfig(
             save_dir=str(ctx.session_dir / "agents") if ctx.session_dir else "",
-            session_prefix=f"miou_miou_miou-{agent_name}",
+            session_prefix=f"meow_meow_meow-{agent_name}",
             enabled=ctx.session_dir is not None,
         )
         load_overrides: dict[str, Any] = {"session_logging": session_logging}
@@ -161,7 +161,7 @@ class _AgentLoopSpawner:
                 hook_config_result=ctx.hook_config_result,
             )
         except Exception as e:
-            logger.warning("MiouMiouMiou subagent '%s' setup failed: %s", agent_name, e)
+            logger.warning("MeowMeowMeow subagent '%s' setup failed: %s", agent_name, e)
             return SubagentOutcome(success=False, error=f"subagent setup failed: {e}")
         if ctx.session_id:
             loop.parent_session_id = ctx.session_id
@@ -202,13 +202,16 @@ class _AgentLoopSpawner:
                             current_message_id = event.message_id
                             final_message.clear()
                         final_message.append(event.content)
+                        snippet = event.content.strip().splitlines()
+                        if snippet and snippet[0]:
+                            on_progress(f"✳ {snippet[0][:90]}")
                     else:
                         self._emit_progress(event, on_progress)
             turns_used = sum(msg.role == Role.assistant for msg in loop.messages)
         except asyncio.CancelledError:
             raise
         except Exception as e:
-            logger.warning("MiouMiouMiou subagent '%s' failed: %s", agent_name, e)
+            logger.warning("MeowMeowMeow subagent '%s' failed: %s", agent_name, e)
             return SubagentOutcome(success=False, error=str(e), turns_used=turns_used)
         finally:
             with suppress(Exception):
@@ -219,64 +222,64 @@ class _AgentLoopSpawner:
         )
 
 
-class MiouMiouMiou(
+class MeowMeowMeow(
     BaseTool[
-        MiouMiouMiouArgs, MiouMiouMiouResult, MiouMiouMiouToolConfig, BaseToolState
+        MeowMeowMeowArgs, MeowMeowMeowResult, MeowMeowMeowToolConfig, BaseToolState
     ],
-    ToolUIData[MiouMiouMiouArgs, MiouMiouMiouResult],
+    ToolUIData[MeowMeowMeowArgs, MeowMeowMeowResult],
 ):
     @classmethod
     def get_call_display(cls, event: ToolCallEvent) -> ToolCallDisplay:
         args = event.args
-        if isinstance(args, MiouMiouMiouArgs) and args.script:
-            with suppress(MiouMiouMiouScriptError):
-                meta = parse_miou_miou_miou_script(args.script).meta
+        if isinstance(args, MeowMeowMeowArgs) and args.script:
+            with suppress(MeowMeowMeowScriptError):
+                meta = parse_meow_meow_meow_script(args.script).meta
                 return ToolCallDisplay(
-                    summary=f"MiouMiouMiou {meta.name}: {meta.description}"
+                    summary=f"MeowMeowMeow {meta.name}: {meta.description}"
                 )
-        return ToolCallDisplay(summary="Running miou_miou_miou")
+        return ToolCallDisplay(summary="Running meow_meow_meow")
 
     @classmethod
     def get_result_display(cls, event: ToolResultEvent) -> ToolResultDisplay:
         result = event.result
-        if isinstance(result, MiouMiouMiouResult):
+        if isinstance(result, MeowMeowMeowResult):
             agents = f"{result.agents_spawned} agent{'s' if result.agents_spawned != 1 else ''}"
             cached = f" ({result.agents_cached} cached)" if result.agents_cached else ""
             match result.status:
-                case MiouMiouMiouStatus.COMPLETED:
+                case MeowMeowMeowStatus.COMPLETED:
                     return ToolResultDisplay(
                         success=True,
-                        message=f"MiouMiouMiou {result.name} completed — {agents}{cached} in {result.duration_s:.0f}s",
+                        message=f"MeowMeowMeow {result.name} completed — {agents}{cached} in {result.duration_s:.0f}s",
                     )
-                case MiouMiouMiouStatus.CANCELLED:
+                case MeowMeowMeowStatus.CANCELLED:
                     return ToolResultDisplay(
                         success=False,
-                        message=f"MiouMiouMiou {result.name} cancelled after {agents}",
+                        message=f"MeowMeowMeow {result.name} cancelled after {agents}",
                     )
-                case MiouMiouMiouStatus.FAILED:
+                case MeowMeowMeowStatus.FAILED:
                     return ToolResultDisplay(
                         success=False,
-                        message=f"MiouMiouMiou {result.name} failed: {result.error}",
+                        message=f"MeowMeowMeow {result.name} failed: {result.error}",
                     )
-        return ToolResultDisplay(success=True, message="MiouMiouMiou finished")
+        return ToolResultDisplay(success=True, message="MeowMeowMeow finished")
 
     @classmethod
     def get_status_text(cls) -> str:
-        return "Running miou_miou_miou"
+        return "Running meow_meow_meow"
 
     async def run(
-        self, args: MiouMiouMiouArgs, ctx: InvokeContext | None = None
-    ) -> AsyncGenerator[ToolStreamEvent | MiouMiouMiouResult, None]:
+        self, args: MeowMeowMeowArgs, ctx: InvokeContext | None = None
+    ) -> AsyncGenerator[ToolStreamEvent | MeowMeowMeowResult, None]:
         if not ctx:
-            raise ToolError("MiouMiouMiou tool requires an invocation context")
+            raise ToolError("MeowMeowMeow tool requires an invocation context")
 
         source = self._load_source(args)
         try:
-            parsed = parse_miou_miou_miou_script(source)
-        except MiouMiouMiouScriptError as e:
-            raise ToolError(f"Invalid miou_miou_miou script: {e}") from e
+            parsed = parse_meow_meow_meow_script(source)
+        except MeowMeowMeowScriptError as e:
+            raise ToolError(f"Invalid meow_meow_meow script: {e}") from e
 
-        run_id = f"miou_{uuid.uuid4().hex[:12]}"
+        run_id = f"meow_{uuid.uuid4().hex[:12]}"
         run_dir = self._runs_dir(ctx) / run_id
         run_dir.mkdir(parents=True, exist_ok=True)
         (run_dir / "script.py").write_text(source, encoding="utf-8")
@@ -287,12 +290,12 @@ class MiouMiouMiou(
             if not candidate.exists():
                 raise ToolError(f"No journal found for run '{args.resume_from_run_id}'")
             resume_journal = candidate
-        journal = MiouMiouMiouJournal.create(
+        journal = MeowMeowMeowJournal.create(
             run_dir / "journal.jsonl", resume_from=resume_journal
         )
 
-        queue: asyncio.Queue[MiouMiouMiouEvent | None] = asyncio.Queue()
-        runtime = MiouMiouMiouRuntime(
+        queue: asyncio.Queue[MeowMeowMeowEvent | None] = asyncio.Queue()
+        runtime = MeowMeowMeowRuntime(
             parsed,
             _AgentLoopSpawner(ctx, self.config),
             args=args.args,
@@ -303,6 +306,9 @@ class MiouMiouMiou(
             max_agents=self.config.max_agents,
             schema_retries=self.config.schema_retries,
         )
+        if (planned := self._phases_planned_event(parsed, ctx)) is not None:
+            yield planned
+
         run_task = asyncio.create_task(runtime.run())
         run_task.add_done_callback(lambda _t: queue.put_nowait(None))
 
@@ -329,16 +335,16 @@ class MiouMiouMiou(
         try:
             outcome = run_task.result()
         except asyncio.CancelledError:
-            yield MiouMiouMiouResult(
+            yield MeowMeowMeowResult(
                 run_id=run_id,
                 name=parsed.meta.name,
-                status=MiouMiouMiouStatus.CANCELLED,
+                status=MeowMeowMeowStatus.CANCELLED,
             )
             return
         except Exception as e:
-            raise ToolError(f"MiouMiouMiou runtime error: {e}") from e
+            raise ToolError(f"MeowMeowMeow runtime error: {e}") from e
 
-        result = MiouMiouMiouResult(
+        result = MeowMeowMeowResult(
             run_id=run_id,
             name=parsed.meta.name,
             status=outcome.status,
@@ -354,21 +360,38 @@ class MiouMiouMiou(
             )
         yield result
 
-    def get_result_extra(self, result: MiouMiouMiouResult) -> str | None:
-        if result.status is MiouMiouMiouStatus.FAILED and result.error:
+    def get_result_extra(self, result: MeowMeowMeowResult) -> str | None:
+        if result.status is MeowMeowMeowStatus.FAILED and result.error:
             return (
-                "The miou_miou_miou script failed. Fix the script and re-invoke with "
+                "The meow_meow_meow script failed. Fix the script and re-invoke with "
                 f'resume_from_run_id="{result.run_id}" — successful agent() calls '
                 "will replay from the journal instead of re-running."
             )
         return None
 
+    def _phases_planned_event(
+        self, parsed: ParsedScript, ctx: InvokeContext
+    ) -> ToolStreamEvent | None:
+        if not parsed.meta.phases:
+            return None
+        return ToolStreamEvent(
+            tool_name=self.get_name(),
+            message="Plan: " + " → ".join(p.title for p in parsed.meta.phases),
+            tool_call_id=ctx.tool_call_id,
+            data={
+                "kind": "phases_planned",
+                "phases": [
+                    {"title": p.title, "detail": p.detail} for p in parsed.meta.phases
+                ],
+            },
+        )
+
     @staticmethod
-    def _load_source(args: MiouMiouMiouArgs) -> str:
+    def _load_source(args: MeowMeowMeowArgs) -> str:
         if args.script_path:
             path = Path(args.script_path)
             if not path.is_file():
-                raise ToolError(f"MiouMiouMiou script not found: {args.script_path}")
+                raise ToolError(f"MeowMeowMeow script not found: {args.script_path}")
             return path.read_text(encoding="utf-8")
         if args.script:
             return args.script
@@ -378,8 +401,8 @@ class MiouMiouMiou(
     def _runs_dir(ctx: InvokeContext) -> Path:
         base = ctx.session_dir or ctx.scratchpad_dir
         if base is None:
-            base = Path(tempfile.gettempdir()) / "vibe-mioumioumiou"
-        return Path(base) / "mioumioumiou"
+            base = Path(tempfile.gettempdir()) / "vibe-meowmeowmeow"
+        return Path(base) / "meowmeowmeow"
 
 
 def _bounded_result(value: Any) -> Any:
@@ -395,7 +418,7 @@ def _bounded_result(value: Any) -> Any:
 _STATUS_VERBS = {AgentRunStatus.OK: "done", AgentRunStatus.ERROR: "failed"}
 
 
-def _humanize_event(event: MiouMiouMiouEvent) -> str | None:
+def _humanize_event(event: MeowMeowMeowEvent) -> str | None:
     match event:
         case PhaseStartedEvent(title=title):
             message = f"Phase: {title}"
@@ -408,7 +431,7 @@ def _humanize_event(event: MiouMiouMiouEvent) -> str | None:
         ):
             suffix = f" in {duration:.0f}s" if duration else ""
             message = f"{label} — {_STATUS_VERBS[status]}{suffix}"
-        case MiouMiouMiouLogEvent(message=message):
+        case MeowMeowMeowLogEvent(message=message):
             pass
         case _:
             message = None

@@ -1,10 +1,10 @@
-# MiouMiouMiou
+# MeowMeowMeow
 
-MiouMiouMiou let the agent orchestrate many subagents deterministically from a single
+MeowMeowMeow let the agent orchestrate many subagents deterministically from a single
 script — fan-out over items, pipeline stages, adversarial verification — with live
 progress in the TUI and a journal that makes runs resumable.
 
-The model invokes the `miou_miou_miou` tool with a self-contained async Python script:
+The model invokes the `meow_meow_meow` tool with a self-contained async Python script:
 
 ```python
 meta = {
@@ -40,7 +40,7 @@ return {"confirmed": [f for g in results if g for f in g if f and f["is_real"]]}
 | `await pipeline(items, *stages)` | Each item flows through all stages independently — no barrier between stages. Stage signature `(prev, item, index)`; trailing params optional. A failing stage drops that item to `None`. |
 | `phase(title)` | Start a display phase; later `agent()` calls group under it. |
 | `log(message)` | Emit a narrator line in the TUI (`print` is aliased to this). |
-| `return value` | Top-level return sets the miou_miou_miou's JSON return value (`result(value)` is an alias). |
+| `return value` | Top-level return sets the meow_meow_meow's JSON return value (`result(value)` is an alias). |
 | `args` | The value passed in the tool's `args` input, verbatim. |
 
 ## Guarantees and limits
@@ -51,9 +51,9 @@ return {"confirmed": [f for g in results if g for f in g if f and f["is_real"]]}
 - Primitive names (`agent`, `parallel`, `pipeline`, `phase`, `log`, `result`,
   `args`) are reserved: using one as a variable, parameter, or function name is
   rejected at parse time — before any agent is spawned — with the offending line.
-- Concurrency is capped at `min(16, cpu - 2)` per miou_miou_miou (configurable via
+- Concurrency is capped at `min(16, cpu - 2)` per meow_meow_meow (configurable via
   `max_concurrency` in the tool config); excess `agent()` calls queue.
-- Lifetime cap of 1000 `agent()` calls per miou_miou_miou; a single `parallel()` /
+- Lifetime cap of 1000 `agent()` calls per meow_meow_meow; a single `parallel()` /
   `pipeline()` accepts at most 4096 items.
 - Structured output (`schema`) is validated with jsonschema and retried
   (`schema_retries`, default 2) with the validation error fed back.
@@ -61,8 +61,8 @@ return {"confirmed": [f for g in results if g for f in g if f and f["is_real"]]}
 ## Resume
 
 Every run persists `script.py`, `journal.jsonl`, and `result.json` under
-`<session_dir>/mioumioumiou/<run_id>/`. Re-invoking with
-`resume_from_run_id="miou_..."` replays successful `agent()` calls whose
+`<session_dir>/meowmeowmeow/<run_id>/`. Re-invoking with
+`resume_from_run_id="meow_..."` replays successful `agent()` calls whose
 `(prompt, schema, agent_name, model)` are unchanged straight from the journal —
 only edited or previously-failed calls run live. Failed calls are never
 journaled, so a resume retries exactly what needs retrying.
@@ -77,7 +77,7 @@ the normal permission flow.
 
 ## TUI
 
-The `miou_miou_miou` tool renders a live tree in the chat: one group per phase, one
+The `meow_meow_meow` tool renders a live tree in the chat: one group per phase, one
 row per agent (spinner → ✓ / ✕ / □), durations, cached-replay markers, the last
 few `log()` lines, and a running `done/total agents` counter in the header.
 Finished rows beyond the last 6 per phase are folded into a `(+N earlier)`

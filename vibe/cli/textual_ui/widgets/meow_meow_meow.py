@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, ClassVar
+import time
+from typing import Any, ClassVar, Literal
 
 from textual import events
 from textual.app import ComposeResult
@@ -15,7 +16,7 @@ from vibe.cli.textual_ui.widgets.no_markup_static import (
 )
 from vibe.cli.textual_ui.widgets.status_message import IndicatorState, StatusMessage
 from vibe.cli.textual_ui.widgets.tools import ToolCallMessage
-from vibe.core.mioumioumiou.models import AgentRunStatus
+from vibe.core.meowmeowmeow.models import AgentRunStatus
 
 _MAX_LOG_LINES = 3
 _KEEP_FINISHED_ROWS_PER_PHASE = 6
@@ -23,11 +24,16 @@ _PROGRESS_MAX_LEN = 48
 _MAX_ACTIVITY_LINES = 50
 _MAX_ACTIVITY_LOG = 500
 _RUNNING_ACTIVITY_TAIL = 2
+_PHASE_DETAIL_MAX_LEN = 44
+
+PhaseState = Literal["pending", "running", "done"]
+
+_PHASE_ICONS: dict[PhaseState, str] = {"pending": "○", "running": "◆", "done": "✓"}
 
 
-class MiouMiouMiouAgentRow(ClickWithoutDragMixin, StatusMessage):
+class MeowMeowMeowAgentRow(ClickWithoutDragMixin, StatusMessage):
     class Clicked(Message):
-        def __init__(self, row: MiouMiouMiouAgentRow) -> None:
+        def __init__(self, row: MeowMeowMeowAgentRow) -> None:
             super().__init__()
             self.row = row
 
@@ -35,11 +41,12 @@ class MiouMiouMiouAgentRow(ClickWithoutDragMixin, StatusMessage):
         self, label: str, *, prompt: str | None = None, phase: str | None = None
     ) -> None:
         self._label = label
-        self._detail = ""
+        self._detail = "thinking…"
         self._activity: Vertical | None = None
         self._activity_count = 0
+        self._started_at = time.monotonic()
         super().__init__()
-        self.add_class("miou_miou_miou-agent-row")
+        self.add_class("meow_meow_meow-agent-row")
         self.finished = False
         self.prompt = prompt
         self.phase_title = phase
@@ -48,19 +55,24 @@ class MiouMiouMiouAgentRow(ClickWithoutDragMixin, StatusMessage):
         self.activity_log: list[str] = []
 
     def compose(self) -> ComposeResult:
-        with Horizontal(classes="miou_miou_miou-agent-header"):
+        with Horizontal(classes="meow_meow_meow-agent-header"):
             self._indicator_widget = NonSelectableStatic(
                 self._spinner.current_frame(), classes="status-indicator-icon"
             )
             yield self._indicator_widget
             self._text_widget = NoMarkupStatic("", classes="status-indicator-text")
             yield self._text_widget
-        self._activity = Vertical(classes="miou_miou_miou-agent-activity")
+        self._activity = Vertical(classes="meow_meow_meow-agent-activity")
         self._activity.display = False
         yield self._activity
 
     def get_content(self) -> str:
         marker = "▸ " if self._activity_count else ""
+        if not self.finished:
+            elapsed = f"{time.monotonic() - self._started_at:.0f}s"
+            if self._detail:
+                return f"{marker}{self._label} · {elapsed} · {self._detail}"
+            return f"{marker}{self._label} · {elapsed}"
         if self._detail:
             return f"{marker}{self._label} · {self._detail}"
         return f"{marker}{self._label}"
@@ -76,7 +88,7 @@ class MiouMiouMiouAgentRow(ClickWithoutDragMixin, StatusMessage):
         )
         if self._activity is not None:
             await self._activity.mount(
-                NoMarkupStatic(message, classes="miou_miou_miou-activity-line")
+                NoMarkupStatic(message, classes="meow_meow_meow-activity-line")
             )
             self._activity_count += 1
             children = list(self._activity.children)
@@ -133,25 +145,52 @@ class MiouMiouMiouAgentRow(ClickWithoutDragMixin, StatusMessage):
         self._refresh_activity()
 
 
-class MiouMiouMiouPhaseGroup(Vertical):
-    def __init__(self, title: str | None) -> None:
+class MeowMeowMeowPhaseGroup(Vertical):
+    def __init__(self, title: str | None, detail: str | None = None) -> None:
         self._title = title
+        self._detail = detail
         self._header: NoMarkupStatic | None = None
         self._rows: Vertical | None = None
         self._pruned = 0
         super().__init__()
-        self.add_class("miou_miou_miou-phase")
+        self.add_class("meow_meow_meow-phase")
+        self.state: PhaseState = "pending"
+        self.started_count = 0
+        self.finished_count = 0
 
     def compose(self) -> ComposeResult:
         if self._title is not None:
-            self._header = NoMarkupStatic(
-                f"◆ {self._title}", classes="miou_miou_miou-phase-header"
-            )
+            self._header = NoMarkupStatic("", classes="meow_meow_meow-phase-header")
             yield self._header
-        self._rows = Vertical(classes="miou_miou_miou-phase-rows")
+        self._rows = Vertical(classes="meow_meow_meow-phase-rows")
         yield self._rows
+        self.refresh_header()
 
-    async def add_row(self, row: MiouMiouMiouAgentRow) -> None:
+    def set_state(self, state: PhaseState) -> None:
+        self.state = state
+        self.refresh_header()
+
+    def refresh_header(self) -> None:
+        if self._header is None:
+            return
+        parts = [f"{_PHASE_ICONS[self.state]} {self._title}"]
+        running = self.started_count - self.finished_count
+        if running > 0:
+            parts.append(f"{running} running")
+        if self.finished_count:
+            parts.append(f"{self.finished_count}/{self.started_count} done")
+        if self._pruned:
+            parts.append(f"+{self._pruned} folded")
+        if self.state == "pending" and self._detail:
+            detail = self._detail
+            if len(detail) > _PHASE_DETAIL_MAX_LEN:
+                detail = detail[: _PHASE_DETAIL_MAX_LEN - 1] + "…"
+            parts.append(detail)
+        self._header.update(" · ".join(parts))
+        for state in ("pending", "running", "done"):
+            self._header.set_class(state == self.state, state)
+
+    async def add_row(self, row: MeowMeowMeowAgentRow) -> None:
         if self._rows is not None:
             await self._rows.mount(row)
 
@@ -161,7 +200,7 @@ class MiouMiouMiouPhaseGroup(Vertical):
         finished = [
             child
             for child in self._rows.children
-            if isinstance(child, MiouMiouMiouAgentRow) and child.finished
+            if isinstance(child, MeowMeowMeowAgentRow) and child.finished
         ]
         overflow = len(finished) - _KEEP_FINISHED_ROWS_PER_PHASE
         if overflow <= 0:
@@ -169,43 +208,43 @@ class MiouMiouMiouPhaseGroup(Vertical):
         for row in finished[:overflow]:
             self._pruned += 1
             await row.remove()
-        if self._pruned and self._header is not None and self._title is not None:
-            self._header.update(f"◆ {self._title} (+{self._pruned} earlier)")
+        self.refresh_header()
 
 
-class MiouMiouMiouCallMessage(ToolCallMessage):
+class MeowMeowMeowCallMessage(ToolCallMessage):
     class InspectRequested(Message):
         def __init__(
-            self, miou_miou_miou: MiouMiouMiouCallMessage, agent_id: int | None = None
+            self, meow_meow_meow: MeowMeowMeowCallMessage, agent_id: int | None = None
         ) -> None:
             super().__init__()
-            self.miou_miou_miou = miou_miou_miou
+            self.meow_meow_meow = meow_meow_meow
             self.agent_id = agent_id
 
-    instances: ClassVar[list[MiouMiouMiouCallMessage]] = []
+    instances: ClassVar[list[MeowMeowMeowCallMessage]] = []
 
     def __init__(self, event: Any = None, **kwargs: Any) -> None:
         self._tree: Vertical | None = None
         self._logs: Vertical | None = None
-        self._phases: dict[str | None, MiouMiouMiouPhaseGroup] = {}
-        self._agents: dict[int, MiouMiouMiouAgentRow] = {}
+        self._phases: dict[str | None, MeowMeowMeowPhaseGroup] = {}
+        self._agents: dict[int, MeowMeowMeowAgentRow] = {}
         self._agent_phase: dict[int, str | None] = {}
         self._agents_total = 0
         self._agents_finished = 0
+        self._current_phase: str | None = None
         super().__init__(event, **kwargs)
-        self.add_class("miou_miou_miou-call")
-        MiouMiouMiouCallMessage.instances.append(self)
+        self.add_class("meow_meow_meow-call")
+        MeowMeowMeowCallMessage.instances.append(self)
 
     @property
-    def agent_rows(self) -> dict[int, MiouMiouMiouAgentRow]:
+    def agent_rows(self) -> dict[int, MeowMeowMeowAgentRow]:
         return self._agents
 
     @property
     def phase_order(self) -> list[str | None]:
         return list(self._phases.keys())
 
-    def on_miou_miou_miou_agent_row_clicked(
-        self, message: MiouMiouMiouAgentRow.Clicked
+    def on_meow_meow_meow_agent_row_clicked(
+        self, message: MeowMeowMeowAgentRow.Clicked
     ) -> None:
         agent_id = next(
             (i for i, row in self._agents.items() if row is message.row), None
@@ -229,9 +268,9 @@ class MiouMiouMiouCallMessage(ToolCallMessage):
                 )
                 self._suffix_widget.display = False
                 yield self._suffix_widget
-            self._tree = Vertical(classes="miou_miou_miou-tree")
+            self._tree = Vertical(classes="meow_meow_meow-tree")
             yield self._tree
-            self._logs = Vertical(classes="miou_miou_miou-logs")
+            self._logs = Vertical(classes="meow_meow_meow-logs")
             self._logs.display = False
             yield self._logs
             self._stream_widget = NoMarkupStatic("", classes="tool-stream-message")
@@ -250,12 +289,23 @@ class MiouMiouMiouCallMessage(ToolCallMessage):
         for row in self._agents.values():
             if not row.finished:
                 row.finish(AgentRunStatus.CANCELLED)
+        for group in self._phases.values():
+            group.finished_count = group.started_count
+            if group.state == "running":
+                group.set_state("done")
+            else:
+                group.refresh_header()
         super().settle(state)
 
-    async def handle_miou_miou_miou_event(self, data: dict[str, Any]) -> None:
+    async def handle_meow_meow_meow_event(self, data: dict[str, Any]) -> None:
         match data.get("kind"):
+            case "phases_planned":
+                for planned in data.get("phases", []):
+                    await self._ensure_phase(
+                        planned.get("title"), detail=planned.get("detail")
+                    )
             case "phase_started":
-                await self._ensure_phase(data["title"])
+                await self._on_phase_started(data["title"])
             case "agent_started":
                 await self._on_agent_started(data)
             case "agent_progress":
@@ -269,26 +319,48 @@ class MiouMiouMiouCallMessage(ToolCallMessage):
             case _:
                 pass
 
-    async def _ensure_phase(self, title: str | None) -> MiouMiouMiouPhaseGroup:
+    async def _ensure_phase(
+        self, title: str | None, detail: str | None = None
+    ) -> MeowMeowMeowPhaseGroup:
         group = self._phases.get(title)
         if group is None:
-            group = MiouMiouMiouPhaseGroup(title)
+            group = MeowMeowMeowPhaseGroup(title, detail)
             self._phases[title] = group
             if self._tree is not None:
                 await self._tree.mount(group)
         return group
 
+    async def _on_phase_started(self, title: str) -> None:
+        group = await self._ensure_phase(title)
+        group.set_state("running")
+        self._current_phase = title
+        self._settle_idle_phases()
+
+    def _settle_idle_phases(self) -> None:
+        for phase_title, group in self._phases.items():
+            if (
+                phase_title != self._current_phase
+                and group.state == "running"
+                and group.started_count > 0
+                and group.finished_count >= group.started_count
+            ):
+                group.set_state("done")
+
     async def _on_agent_started(self, data: dict[str, Any]) -> None:
         agent_id = data["agent_id"]
         phase = data.get("phase")
         group = await self._ensure_phase(phase)
-        row = MiouMiouMiouAgentRow(
+        if group.state == "pending":
+            group.set_state("running")
+        row = MeowMeowMeowAgentRow(
             data["label"], prompt=data.get("prompt"), phase=phase
         )
         self._agents[agent_id] = row
         self._agent_phase[agent_id] = phase
         self._agents_total += 1
+        group.started_count += 1
         await group.add_row(row)
+        group.refresh_header()
         self.update_display()
 
     async def _on_agent_finished(self, data: dict[str, Any]) -> None:
@@ -306,7 +378,10 @@ class MiouMiouMiouCallMessage(ToolCallMessage):
         )
         group = self._phases.get(self._agent_phase.get(agent_id))
         if group is not None:
+            group.finished_count += 1
             await group.prune_finished()
+            group.refresh_header()
+        self._settle_idle_phases()
         self.update_display()
 
     async def _append_log(self, message: str) -> None:
@@ -314,7 +389,7 @@ class MiouMiouMiouCallMessage(ToolCallMessage):
             return
         self._logs.display = True
         await self._logs.mount(
-            NoMarkupStatic(f"→ {message}", classes="miou_miou_miou-log-line")
+            NoMarkupStatic(f"→ {message}", classes="meow_meow_meow-log-line")
         )
         children = list(self._logs.children)
         for extra in children[:-_MAX_LOG_LINES]:

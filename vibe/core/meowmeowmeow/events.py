@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
-from vibe.core.mioumioumiou.models import AgentRunStatus, MiouMiouMiouStatus
+from vibe.core.meowmeowmeow.models import AgentRunStatus, MeowMeowMeowStatus
 
 
 class PhaseStartedEvent(BaseModel):
@@ -38,26 +38,26 @@ class AgentFinishedEvent(BaseModel):
     output: str | None = None
 
 
-class MiouMiouMiouLogEvent(BaseModel):
+class MeowMeowMeowLogEvent(BaseModel):
     kind: Literal["log"] = "log"
     message: str
 
 
-class MiouMiouMiouFinishedEvent(BaseModel):
-    kind: Literal["miou_miou_miou_finished"] = "miou_miou_miou_finished"
-    status: MiouMiouMiouStatus
+class MeowMeowMeowFinishedEvent(BaseModel):
+    kind: Literal["meow_meow_meow_finished"] = "meow_meow_meow_finished"
+    status: MeowMeowMeowStatus
     agents_spawned: int
     agents_cached: int
     duration_s: float
     error: str | None = None
 
 
-MiouMiouMiouEvent = Annotated[
+MeowMeowMeowEvent = Annotated[
     PhaseStartedEvent
     | AgentStartedEvent
     | AgentProgressEvent
     | AgentFinishedEvent
-    | MiouMiouMiouLogEvent
-    | MiouMiouMiouFinishedEvent,
+    | MeowMeowMeowLogEvent
+    | MeowMeowMeowFinishedEvent,
     Field(discriminator="kind"),
 ]

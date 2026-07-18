@@ -796,47 +796,63 @@ StatusMessage {
     }
 }
 
-.miou_miou_miou-tree {
+.meow_meow_meow-tree {
     width: 100%;
     height: auto;
     padding: 0 0 0 2;
 }
 
-.miou_miou_miou-phase {
+.meow_meow_meow-phase {
     width: 100%;
     height: auto;
 }
 
-.miou_miou_miou-phase-header {
+.meow_meow_meow-phase-header {
     width: 100%;
     height: auto;
-    color: $primary;
     margin-top: 0;
+
+    &.pending {
+        color: $text-muted;
+
+        &:ansi {
+            text-style: dim;
+        }
+    }
+
+    &.running {
+        color: $mistral_orange;
+        text-style: bold;
+    }
+
+    &.done {
+        color: $success;
+    }
 }
 
-.miou_miou_miou-phase-rows {
+.meow_meow_meow-phase-rows {
     width: 100%;
     height: auto;
     padding: 0 0 0 2;
 }
 
-.miou_miou_miou-agent-row {
+.meow_meow_meow-agent-row {
     width: 100%;
     height: auto;
 }
 
-.miou_miou_miou-agent-header {
+.meow_meow_meow-agent-header {
     width: 100%;
     height: auto;
 }
 
-.miou_miou_miou-agent-activity {
+.meow_meow_meow-agent-activity {
     width: 100%;
     height: auto;
     padding: 0 0 0 2;
 }
 
-.miou_miou_miou-activity-line {
+.meow_meow_meow-activity-line {
     width: 100%;
     height: auto;
     color: $text-muted;
@@ -846,13 +862,13 @@ StatusMessage {
     }
 }
 
-.miou_miou_miou-logs {
+.meow_meow_meow-logs {
     width: 100%;
     height: auto;
     padding: 0 0 0 2;
 }
 
-.miou_miou_miou-log-line {
+.meow_meow_meow-log-line {
     width: 100%;
     height: auto;
     color: $text-muted;
@@ -862,64 +878,64 @@ StatusMessage {
     }
 }
 
-MiouMiouMiouInspectorScreen {
+MeowMeowMeowInspectorScreen {
     align: center middle;
     background: $background 60%;
 }
 
-#miou_miou_miou-inspector {
+#meow_meow_meow-inspector {
     width: 90%;
     height: 80%;
     background: $surface;
-    border: round $primary;
+    border: round $mistral_orange;
     padding: 1 2;
 }
 
-#miou_miou_miou-inspector-title {
+#meow_meow_meow-inspector-title {
     width: 100%;
     height: auto;
     color: $text-muted;
     margin-bottom: 1;
 }
 
-#miou_miou_miou-inspector-body {
+#meow_meow_meow-inspector-body {
     width: 100%;
     height: 1fr;
 }
 
-#miou_miou_miou-inspector-tree {
+#meow_meow_meow-inspector-tree {
     width: 40%;
     height: 100%;
     border-right: solid $panel;
     padding-right: 1;
 }
 
-#miou_miou_miou-inspector-detail {
+#meow_meow_meow-inspector-detail {
     width: 60%;
     height: 100%;
     padding: 0 0 0 2;
 }
 
-.miou_miou_miou-inspector-header {
+.meow_meow_meow-inspector-header {
     width: 100%;
     height: auto;
     margin-bottom: 1;
 }
 
-.miou_miou_miou-inspector-section {
+.meow_meow_meow-inspector-section {
     width: 100%;
     height: auto;
-    color: $primary;
+    color: $mistral_orange;
     margin: 1 0 0 0;
 }
 
-.miou_miou_miou-inspector-body-text {
+.meow_meow_meow-inspector-body-text {
     width: 100%;
     height: auto;
     color: $foreground;
 }
 
-.miou_miou_miou-call:hover .status-indicator-text {
+.meow_meow_meow-call:hover .status-indicator-text {
     text-style: underline;
 }
 

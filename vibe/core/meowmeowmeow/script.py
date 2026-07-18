@@ -12,10 +12,10 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from vibe.core.mioumioumiou.errors import MiouMiouMiouScriptError
-from vibe.core.mioumioumiou.models import MiouMiouMiouMeta
+from vibe.core.meowmeowmeow.errors import MeowMeowMeowScriptError
+from vibe.core.meowmeowmeow.models import MeowMeowMeowMeta
 
-MIOUMIOUMIOU_MAIN_NAME = "__miou_miou_miou_main__"
+MEOWMEOWMEOW_MAIN_NAME = "__meow_meow_meow_main__"
 _OFFENDING_LINE_MAX_LEN = 120
 MAX_SCRIPT_LINES = 200
 MAX_STRING_LITERAL_LEN = 250
@@ -79,11 +79,11 @@ _ALLOWED_BUILTIN_NAMES = (
 )
 
 _BANNED_MODULE_REASONS = {
-    "time": "wall-clock time would break miou_miou_miou resume; pass timestamps in via args",
-    "datetime": "wall-clock time would break miou_miou_miou resume; pass timestamps in via args",
-    "random": "nondeterminism would break miou_miou_miou resume; vary agent prompts by index instead",
-    "os": "miou_miou_miou scripts have no filesystem access; subagents do the real-world work",
-    "sys": "miou_miou_miou scripts have no interpreter access; subagents do the real-world work",
+    "time": "wall-clock time would break meow_meow_meow resume; pass timestamps in via args",
+    "datetime": "wall-clock time would break meow_meow_meow resume; pass timestamps in via args",
+    "random": "nondeterminism would break meow_meow_meow resume; vary agent prompts by index instead",
+    "os": "meow_meow_meow scripts have no filesystem access; subagents do the real-world work",
+    "sys": "meow_meow_meow scripts have no interpreter access; subagents do the real-world work",
 }
 
 
@@ -93,55 +93,55 @@ class _BannedModule:
         self._reason = reason
 
     def __getattr__(self, item: str) -> Any:
-        raise MiouMiouMiouScriptError(
-            f"{self._name}.{item} is unavailable in miou_miou_miou scripts: {self._reason}"
+        raise MeowMeowMeowScriptError(
+            f"{self._name}.{item} is unavailable in meow_meow_meow scripts: {self._reason}"
         )
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        raise MiouMiouMiouScriptError(
-            f"{self._name} is unavailable in miou_miou_miou scripts: {self._reason}"
+        raise MeowMeowMeowScriptError(
+            f"{self._name} is unavailable in meow_meow_meow scripts: {self._reason}"
         )
 
 
 @dataclass(frozen=True)
 class ParsedScript:
-    meta: MiouMiouMiouMeta
+    meta: MeowMeowMeowMeta
     code: types.CodeType
     source: str
 
 
-def parse_miou_miou_miou_script(source: str) -> ParsedScript:
+def parse_meow_meow_meow_script(source: str) -> ParsedScript:
     try:
         tree = ast.parse(source)
     except SyntaxError as e:
-        raise MiouMiouMiouScriptError(_format_syntax_error(source, e)) from e
+        raise MeowMeowMeowScriptError(_format_syntax_error(source, e)) from e
 
     errors: list[str] = []
-    meta: MiouMiouMiouMeta | None = None
+    meta: MeowMeowMeowMeta | None = None
     try:
         meta = _extract_meta(tree)
-    except MiouMiouMiouScriptError as e:
+    except MeowMeowMeowScriptError as e:
         errors.append(str(e))
     line_count = len(source.splitlines())
     if line_count > MAX_SCRIPT_LINES:
         errors.append(
             f"script is {line_count} lines; the cap is {MAX_SCRIPT_LINES}. "
-            "MiouMiouMiou scripts must stay short and mechanical — move prose "
+            "MeowMeowMeow scripts must stay short and mechanical — move prose "
             "briefs to the `prompts` tool argument and data to `args`"
         )
     errors.extend(_collect_violations(tree))
     if errors:
         if len(errors) == 1:
-            raise MiouMiouMiouScriptError(errors[0])
-        raise MiouMiouMiouScriptError(
+            raise MeowMeowMeowScriptError(errors[0])
+        raise MeowMeowMeowScriptError(
             "the script breaks these rules:\n- " + "\n- ".join(errors)
         )
     if meta is None:
-        raise MiouMiouMiouScriptError("invalid meta")
+        raise MeowMeowMeowScriptError("invalid meta")
 
     body = tree.body[1:] or [ast.Pass()]
     wrapper = ast.AsyncFunctionDef(
-        name=MIOUMIOUMIOU_MAIN_NAME,
+        name=MEOWMEOWMEOW_MAIN_NAME,
         args=ast.arguments(
             posonlyargs=[], args=[], kwonlyargs=[], kw_defaults=[], defaults=[]
         ),
@@ -152,7 +152,7 @@ def parse_miou_miou_miou_script(source: str) -> ParsedScript:
     )
     module = ast.Module(body=[wrapper], type_ignores=[])
     ast.fix_missing_locations(module)
-    code = compile(module, filename=f"<miou_miou_miou:{meta.name}>", mode="exec")
+    code = compile(module, filename=f"<meow_meow_meow:{meta.name}>", mode="exec")
     return ParsedScript(meta=meta, code=code, source=source)
 
 
@@ -200,7 +200,7 @@ def _make_print(log: Any) -> Any:
     return _print
 
 
-def _extract_meta(tree: ast.Module) -> MiouMiouMiouMeta:
+def _extract_meta(tree: ast.Module) -> MeowMeowMeowMeta:
     first = tree.body[0] if tree.body else None
     if (
         not isinstance(first, ast.Assign)
@@ -208,21 +208,21 @@ def _extract_meta(tree: ast.Module) -> MiouMiouMiouMeta:
         or not isinstance(first.targets[0], ast.Name)
         or first.targets[0].id != "meta"
     ):
-        raise MiouMiouMiouScriptError(
+        raise MeowMeowMeowScriptError(
             'script must start with `meta = {"name": ..., "description": ...}`'
         )
     try:
         raw = ast.literal_eval(first.value)
     except ValueError as e:
-        raise MiouMiouMiouScriptError(
+        raise MeowMeowMeowScriptError(
             "meta must be a pure literal dict (no variables, calls, or comprehensions)"
         ) from e
     if not isinstance(raw, dict):
-        raise MiouMiouMiouScriptError("meta must be a dict literal")
+        raise MeowMeowMeowScriptError("meta must be a dict literal")
     try:
-        return MiouMiouMiouMeta.model_validate(raw)
+        return MeowMeowMeowMeta.model_validate(raw)
     except ValidationError as e:
-        raise MiouMiouMiouScriptError(f"invalid meta: {e}") from e
+        raise MeowMeowMeowScriptError(f"invalid meta: {e}") from e
 
 
 RESERVED_PRIMITIVES = frozenset({
@@ -247,16 +247,16 @@ def _collect_violations(tree: ast.Module) -> list[str]:
         location = f" (script line {line})" if line else ""
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             errors.append(
-                f"imports are unavailable in miou_miou_miou scripts{location}; "
+                f"imports are unavailable in meow_meow_meow scripts{location}; "
                 "json, math and re are pre-loaded"
             )
         elif isinstance(node, ast.Attribute) and node.attr.startswith("__"):
             errors.append(
-                f"dunder attribute access is unavailable in miou_miou_miou scripts{location}"
+                f"dunder attribute access is unavailable in meow_meow_meow scripts{location}"
             )
         elif isinstance(node, ast.Name) and node.id in {"__builtins__", "__import__"}:
             errors.append(
-                f"{node.id} is unavailable in miou_miou_miou scripts{location}"
+                f"{node.id} is unavailable in meow_meow_meow scripts{location}"
             )
         elif (
             isinstance(node, ast.Constant)
@@ -273,7 +273,7 @@ def _collect_violations(tree: ast.Module) -> list[str]:
             shadowed = _shadowed_primitive(node)
             if shadowed is not None:
                 errors.append(
-                    f"'{shadowed}' is a miou_miou_miou primitive and cannot be used as a "
+                    f"'{shadowed}' is a meow_meow_meow primitive and cannot be used as a "
                     f"variable, parameter, or function name{location} — rename it "
                     f"(e.g. '{shadowed}_value')"
                 )

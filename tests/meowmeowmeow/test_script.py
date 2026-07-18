@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import pytest
 
-from vibe.core.mioumioumiou.errors import MiouMiouMiouScriptError
-from vibe.core.mioumioumiou.script import (
+from vibe.core.meowmeowmeow.errors import MeowMeowMeowScriptError
+from vibe.core.meowmeowmeow.script import (
     build_script_globals,
-    parse_miou_miou_miou_script,
+    parse_meow_meow_meow_script,
 )
 
 VALID_SCRIPT = """
 meta = {
     "name": "demo",
-    "description": "A demo miou_miou_miou",
+    "description": "A demo meow_meow_meow",
     "phases": [{"title": "Scan"}, {"title": "Fix", "detail": "one agent per item"}],
 }
 result(42)
@@ -19,62 +19,62 @@ result(42)
 
 
 def test_parse_valid_script() -> None:
-    parsed = parse_miou_miou_miou_script(VALID_SCRIPT)
+    parsed = parse_meow_meow_meow_script(VALID_SCRIPT)
     assert parsed.meta.name == "demo"
-    assert parsed.meta.description == "A demo miou_miou_miou"
+    assert parsed.meta.description == "A demo meow_meow_meow"
     assert [p.title for p in parsed.meta.phases] == ["Scan", "Fix"]
 
 
 def test_missing_meta_rejected() -> None:
-    with pytest.raises(MiouMiouMiouScriptError, match="must start with"):
-        parse_miou_miou_miou_script("x = 1")
+    with pytest.raises(MeowMeowMeowScriptError, match="must start with"):
+        parse_meow_meow_meow_script("x = 1")
 
 
 def test_non_literal_meta_rejected() -> None:
     script = 'name = "x"\nmeta = {"name": name, "description": "d"}'
-    with pytest.raises(MiouMiouMiouScriptError, match="must start with"):
-        parse_miou_miou_miou_script(script)
+    with pytest.raises(MeowMeowMeowScriptError, match="must start with"):
+        parse_meow_meow_meow_script(script)
 
 
 def test_computed_meta_rejected() -> None:
     script = 'meta = {"name": "a" + "b", "description": "d"}'
-    with pytest.raises(MiouMiouMiouScriptError, match="pure literal"):
-        parse_miou_miou_miou_script(script)
+    with pytest.raises(MeowMeowMeowScriptError, match="pure literal"):
+        parse_meow_meow_meow_script(script)
 
 
 def test_invalid_meta_name_rejected() -> None:
     script = 'meta = {"name": "Bad Name!", "description": "d"}'
-    with pytest.raises(MiouMiouMiouScriptError, match="invalid meta"):
-        parse_miou_miou_miou_script(script)
+    with pytest.raises(MeowMeowMeowScriptError, match="invalid meta"):
+        parse_meow_meow_meow_script(script)
 
 
 def test_unknown_meta_key_rejected() -> None:
     script = 'meta = {"name": "ok", "description": "d", "phase": []}'
-    with pytest.raises(MiouMiouMiouScriptError, match="invalid meta"):
-        parse_miou_miou_miou_script(script)
+    with pytest.raises(MeowMeowMeowScriptError, match="invalid meta"):
+        parse_meow_meow_meow_script(script)
 
 
 def test_syntax_error_rejected() -> None:
-    with pytest.raises(MiouMiouMiouScriptError, match="syntax error"):
-        parse_miou_miou_miou_script('meta = {"name": "x", "description": "d"}\ndef (')
+    with pytest.raises(MeowMeowMeowScriptError, match="syntax error"):
+        parse_meow_meow_meow_script('meta = {"name": "x", "description": "d"}\ndef (')
 
 
 def test_imports_rejected() -> None:
     script = 'meta = {"name": "x", "description": "d"}\nimport os'
-    with pytest.raises(MiouMiouMiouScriptError, match="imports are unavailable"):
-        parse_miou_miou_miou_script(script)
+    with pytest.raises(MeowMeowMeowScriptError, match="imports are unavailable"):
+        parse_meow_meow_meow_script(script)
 
 
 def test_from_imports_rejected() -> None:
     script = 'meta = {"name": "x", "description": "d"}\nfrom os import path'
-    with pytest.raises(MiouMiouMiouScriptError, match="imports are unavailable"):
-        parse_miou_miou_miou_script(script)
+    with pytest.raises(MeowMeowMeowScriptError, match="imports are unavailable"):
+        parse_meow_meow_meow_script(script)
 
 
 def test_dunder_access_rejected() -> None:
     script = 'meta = {"name": "x", "description": "d"}\ny = ().__class__'
-    with pytest.raises(MiouMiouMiouScriptError, match="dunder"):
-        parse_miou_miou_miou_script(script)
+    with pytest.raises(MeowMeowMeowScriptError, match="dunder"):
+        parse_meow_meow_meow_script(script)
 
 
 def test_top_level_await_and_return_compile() -> None:
@@ -84,7 +84,7 @@ def test_top_level_await_and_return_compile() -> None:
         "value = await helper()\n"
         "return value\n"
     )
-    parsed = parse_miou_miou_miou_script(script)
+    parsed = parse_meow_meow_meow_script(script)
     assert parsed.meta.name == "x"
 
 
@@ -94,9 +94,9 @@ def test_shadowing_primitive_variable_rejected() -> None:
         "for result in [1, 2]:\n    log(result)\n"
     )
     with pytest.raises(
-        MiouMiouMiouScriptError, match="'result' is a miou_miou_miou primitive"
+        MeowMeowMeowScriptError, match="'result' is a meow_meow_meow primitive"
     ):
-        parse_miou_miou_miou_script(script)
+        parse_meow_meow_meow_script(script)
 
 
 def test_shadowing_primitive_parameter_rejected() -> None:
@@ -105,9 +105,9 @@ def test_shadowing_primitive_parameter_rejected() -> None:
         "def helper(agent):\n    return agent\n"
     )
     with pytest.raises(
-        MiouMiouMiouScriptError, match="'agent' is a miou_miou_miou primitive"
+        MeowMeowMeowScriptError, match="'agent' is a meow_meow_meow primitive"
     ):
-        parse_miou_miou_miou_script(script)
+        parse_meow_meow_meow_script(script)
 
 
 def test_shadowing_primitive_function_name_rejected() -> None:
@@ -115,29 +115,29 @@ def test_shadowing_primitive_function_name_rejected() -> None:
         'meta = {"name": "x", "description": "d"}\nasync def phase():\n    return 1\n'
     )
     with pytest.raises(
-        MiouMiouMiouScriptError, match="'phase' is a miou_miou_miou primitive"
+        MeowMeowMeowScriptError, match="'phase' is a meow_meow_meow primitive"
     ):
-        parse_miou_miou_miou_script(script)
+        parse_meow_meow_meow_script(script)
 
 
 def test_shadowing_error_includes_line_number() -> None:
     script = 'meta = {"name": "x", "description": "d"}\nx = 1\nresult = "oops"\n'
-    with pytest.raises(MiouMiouMiouScriptError, match="script line 3"):
-        parse_miou_miou_miou_script(script)
+    with pytest.raises(MeowMeowMeowScriptError, match="script line 3"):
+        parse_meow_meow_meow_script(script)
 
 
 def test_missing_await_on_agent_call_rejected() -> None:
     script = 'meta = {"name": "x", "description": "d"}\nvalue = agent("prompt")\n'
-    with pytest.raises(MiouMiouMiouScriptError, match="write 'await agent"):
-        parse_miou_miou_miou_script(script)
+    with pytest.raises(MeowMeowMeowScriptError, match="write 'await agent"):
+        parse_meow_meow_meow_script(script)
 
 
 def test_missing_await_on_parallel_expr_rejected() -> None:
     script = (
         'meta = {"name": "x", "description": "d"}\nparallel([lambda: agent("a")])\n'
     )
-    with pytest.raises(MiouMiouMiouScriptError, match="write 'await parallel"):
-        parse_miou_miou_miou_script(script)
+    with pytest.raises(MeowMeowMeowScriptError, match="write 'await parallel"):
+        parse_meow_meow_meow_script(script)
 
 
 def test_missing_await_in_async_def_rejected() -> None:
@@ -146,8 +146,8 @@ def test_missing_await_in_async_def_rejected() -> None:
         "async def stage(prev):\n"
         "    return pipeline([prev], lambda x: x)\n"
     )
-    with pytest.raises(MiouMiouMiouScriptError, match="write 'await pipeline"):
-        parse_miou_miou_miou_script(script)
+    with pytest.raises(MeowMeowMeowScriptError, match="write 'await pipeline"):
+        parse_meow_meow_meow_script(script)
 
 
 def test_thunk_patterns_are_not_flagged() -> None:
@@ -159,22 +159,22 @@ def test_thunk_patterns_are_not_flagged() -> None:
         "outs = await parallel(thunks)\n"
         "return outs\n"
     )
-    parsed = parse_miou_miou_miou_script(script)
+    parsed = parse_meow_meow_meow_script(script)
     assert parsed.meta.name == "x"
 
 
 def test_prompts_is_reserved() -> None:
     script = 'meta = {"name": "x", "description": "d"}\nprompts = {}\n'
     with pytest.raises(
-        MiouMiouMiouScriptError, match="'prompts' is a miou_miou_miou primitive"
+        MeowMeowMeowScriptError, match="'prompts' is a meow_meow_meow primitive"
     ):
-        parse_miou_miou_miou_script(script)
+        parse_meow_meow_meow_script(script)
 
 
 def test_syntax_error_shows_offending_line_and_tip() -> None:
     script = 'meta = {"name": "x", "description": "d"}\nx = "unterminated\n'
-    with pytest.raises(MiouMiouMiouScriptError) as exc_info:
-        parse_miou_miou_miou_script(script)
+    with pytest.raises(MeowMeowMeowScriptError) as exc_info:
+        parse_meow_meow_meow_script(script)
     message = str(exc_info.value)
     assert "offending line" in message
     assert "unterminated" in message
@@ -184,8 +184,8 @@ def test_syntax_error_shows_offending_line_and_tip() -> None:
 def test_long_string_literal_rejected() -> None:
     prose = "word " * 100
     script = f'meta = {{"name": "x", "description": "d"}}\nbrief = "{prose}"\n'
-    with pytest.raises(MiouMiouMiouScriptError, match="prompts"):
-        parse_miou_miou_miou_script(script)
+    with pytest.raises(MeowMeowMeowScriptError, match="prompts"):
+        parse_meow_meow_meow_script(script)
 
 
 def test_meta_strings_exempt_from_string_cap() -> None:
@@ -195,14 +195,14 @@ def test_meta_strings_exempt_from_string_cap() -> None:
         f'"phases": [{{"title": "Scan", "detail": "{detail}"}}]}}\n'
         "return None\n"
     )
-    parsed = parse_miou_miou_miou_script(script)
+    parsed = parse_meow_meow_meow_script(script)
     assert parsed.meta.name == "x"
 
 
 def test_too_many_lines_rejected() -> None:
     script = 'meta = {"name": "x", "description": "d"}\n' + "x = 1\n" * 250
-    with pytest.raises(MiouMiouMiouScriptError, match="lines; the cap is"):
-        parse_miou_miou_miou_script(script)
+    with pytest.raises(MeowMeowMeowScriptError, match="lines; the cap is"):
+        parse_meow_meow_meow_script(script)
 
 
 def test_all_errors_reported_together() -> None:
@@ -212,22 +212,22 @@ def test_all_errors_reported_together() -> None:
         'value = agent("prompt")\n'
         "import os\n"
     )
-    with pytest.raises(MiouMiouMiouScriptError) as exc_info:
-        parse_miou_miou_miou_script(script)
+    with pytest.raises(MeowMeowMeowScriptError) as exc_info:
+        parse_meow_meow_meow_script(script)
     message = str(exc_info.value)
     assert "breaks these rules" in message
-    assert "'result' is a miou_miou_miou primitive" in message
+    assert "'result' is a meow_meow_meow primitive" in message
     assert "write 'await agent" in message
     assert "imports are unavailable" in message
 
 
 def test_banned_modules_raise() -> None:
     ns = build_script_globals({"log": lambda _m: None})
-    with pytest.raises(MiouMiouMiouScriptError, match="unavailable"):
+    with pytest.raises(MeowMeowMeowScriptError, match="unavailable"):
         ns["time"].time()
-    with pytest.raises(MiouMiouMiouScriptError, match="unavailable"):
+    with pytest.raises(MeowMeowMeowScriptError, match="unavailable"):
         ns["random"].random()
-    with pytest.raises(MiouMiouMiouScriptError, match="unavailable"):
+    with pytest.raises(MeowMeowMeowScriptError, match="unavailable"):
         ns["datetime"].now()
 
 

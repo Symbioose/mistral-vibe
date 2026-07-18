@@ -6,23 +6,23 @@ from typing import Any, ClassVar, cast
 
 import pytest
 
-from vibe.core.mioumioumiou.models import (
-    MiouMiouMiouStatus,
+from vibe.core.meowmeowmeow.models import (
+    MeowMeowMeowStatus,
     SubagentOutcome,
     SubagentRequest,
 )
 from vibe.core.tools.base import InvokeContext, ToolError
-import vibe.core.tools.builtins.miou_miou_miou as miou_miou_miou_module
-from vibe.core.tools.builtins.miou_miou_miou import (
-    MiouMiouMiou,
-    MiouMiouMiouArgs,
-    MiouMiouMiouResult,
-    MiouMiouMiouToolConfig,
+import vibe.core.tools.builtins.meow_meow_meow as meow_meow_meow_module
+from vibe.core.tools.builtins.meow_meow_meow import (
+    MeowMeowMeow,
+    MeowMeowMeowArgs,
+    MeowMeowMeowResult,
+    MeowMeowMeowToolConfig,
 )
 from vibe.core.types import ToolStreamEvent
 
 SCRIPT = """
-meta = {"name": "demo", "description": "demo miou_miou_miou", "phases": [{"title": "Go"}]}
+meta = {"name": "demo", "description": "demo meow_meow_meow", "phases": [{"title": "Go"}]}
 phase("Go")
 outs = await parallel([lambda: agent("alpha"), lambda: agent("beta")])
 log("both done")
@@ -33,7 +33,7 @@ result({"outs": outs})
 class FakeSpawner:
     calls: ClassVar[list[SubagentRequest]] = []
 
-    def __init__(self, _ctx: InvokeContext, _config: MiouMiouMiouToolConfig) -> None:
+    def __init__(self, _ctx: InvokeContext, _config: MeowMeowMeowToolConfig) -> None:
         pass
 
     async def run(
@@ -47,21 +47,21 @@ class FakeSpawner:
 @pytest.fixture
 def fake_spawner(monkeypatch: pytest.MonkeyPatch) -> type[FakeSpawner]:
     FakeSpawner.calls = []
-    monkeypatch.setattr(miou_miou_miou_module, "_AgentLoopSpawner", FakeSpawner)
+    monkeypatch.setattr(meow_meow_meow_module, "_AgentLoopSpawner", FakeSpawner)
     return FakeSpawner
 
 
-def make_tool() -> MiouMiouMiou:
+def make_tool() -> MeowMeowMeow:
     return cast(
-        MiouMiouMiou, MiouMiouMiou.from_config(lambda: MiouMiouMiouToolConfig())
+        MeowMeowMeow, MeowMeowMeow.from_config(lambda: MeowMeowMeowToolConfig())
     )
 
 
 async def collect(
-    tool: MiouMiouMiou, args: MiouMiouMiouArgs, ctx: InvokeContext
-) -> tuple[list[ToolStreamEvent], MiouMiouMiouResult]:
+    tool: MeowMeowMeow, args: MeowMeowMeowArgs, ctx: InvokeContext
+) -> tuple[list[ToolStreamEvent], MeowMeowMeowResult]:
     stream: list[ToolStreamEvent] = []
-    final: MiouMiouMiouResult | None = None
+    final: MeowMeowMeowResult | None = None
     async for item in tool.run(args, ctx):
         if isinstance(item, ToolStreamEvent):
             stream.append(item)
@@ -77,9 +77,9 @@ async def test_tool_runs_script_end_to_end(
 ) -> None:
     tool = make_tool()
     ctx = InvokeContext(tool_call_id="tc1", session_dir=tmp_path)
-    stream, final = await collect(tool, MiouMiouMiouArgs(script=SCRIPT), ctx)
+    stream, final = await collect(tool, MeowMeowMeowArgs(script=SCRIPT), ctx)
 
-    assert final.status is MiouMiouMiouStatus.COMPLETED
+    assert final.status is MeowMeowMeowStatus.COMPLETED
     assert final.name == "demo"
     assert final.result == {"outs": ["echo:alpha", "echo:beta"]}
     assert final.agents_spawned == 2
@@ -92,7 +92,7 @@ async def test_tool_runs_script_end_to_end(
     assert "agent_started" in kinds
     assert "agent_finished" in kinds
 
-    run_dir = tmp_path / "mioumioumiou" / final.run_id
+    run_dir = tmp_path / "meowmeowmeow" / final.run_id
     assert (run_dir / "script.py").read_text(encoding="utf-8") == SCRIPT
     assert (run_dir / "journal.jsonl").exists()
     assert (run_dir / "result.json").exists()
@@ -104,13 +104,13 @@ async def test_tool_resume_replays_journal(
 ) -> None:
     tool = make_tool()
     ctx = InvokeContext(tool_call_id="tc1", session_dir=tmp_path)
-    _stream, first = await collect(tool, MiouMiouMiouArgs(script=SCRIPT), ctx)
+    _stream, first = await collect(tool, MeowMeowMeowArgs(script=SCRIPT), ctx)
     assert len(fake_spawner.calls) == 2
 
     _stream, second = await collect(
-        tool, MiouMiouMiouArgs(script=SCRIPT, resume_from_run_id=first.run_id), ctx
+        tool, MeowMeowMeowArgs(script=SCRIPT, resume_from_run_id=first.run_id), ctx
     )
-    assert second.status is MiouMiouMiouStatus.COMPLETED
+    assert second.status is MeowMeowMeowStatus.COMPLETED
     assert second.result == first.result
     assert second.agents_cached == 2
     assert len(fake_spawner.calls) == 2
@@ -125,7 +125,7 @@ async def test_tool_resume_unknown_run_id(
     with pytest.raises(ToolError, match="No journal"):
         await collect(
             tool,
-            MiouMiouMiouArgs(script=SCRIPT, resume_from_run_id="miou_missing"),
+            MeowMeowMeowArgs(script=SCRIPT, resume_from_run_id="meow_missing"),
             ctx,
         )
 
@@ -134,8 +134,8 @@ async def test_tool_resume_unknown_run_id(
 async def test_tool_rejects_invalid_script(tmp_path: Path) -> None:
     tool = make_tool()
     ctx = InvokeContext(tool_call_id="tc1", session_dir=tmp_path)
-    with pytest.raises(ToolError, match="Invalid miou_miou_miou script"):
-        await collect(tool, MiouMiouMiouArgs(script="x = 1"), ctx)
+    with pytest.raises(ToolError, match="Invalid meow_meow_meow script"):
+        await collect(tool, MeowMeowMeowArgs(script="x = 1"), ctx)
 
 
 @pytest.mark.asyncio
@@ -143,32 +143,32 @@ async def test_tool_requires_script_or_path(tmp_path: Path) -> None:
     tool = make_tool()
     ctx = InvokeContext(tool_call_id="tc1", session_dir=tmp_path)
     with pytest.raises(ToolError, match="script"):
-        await collect(tool, MiouMiouMiouArgs(), ctx)
+        await collect(tool, MeowMeowMeowArgs(), ctx)
 
 
 @pytest.mark.asyncio
 async def test_tool_loads_script_from_path(
     tmp_path: Path, fake_spawner: type[FakeSpawner]
 ) -> None:
-    script_file = tmp_path / "my_miou_miou_miou.py"
+    script_file = tmp_path / "my_meow_meow_meow.py"
     script_file.write_text(SCRIPT, encoding="utf-8")
     tool = make_tool()
     ctx = InvokeContext(tool_call_id="tc1", session_dir=tmp_path)
     _stream, final = await collect(
-        tool, MiouMiouMiouArgs(script_path=str(script_file)), ctx
+        tool, MeowMeowMeowArgs(script_path=str(script_file)), ctx
     )
-    assert final.status is MiouMiouMiouStatus.COMPLETED
+    assert final.status is MeowMeowMeowStatus.COMPLETED
 
 
 @pytest.mark.asyncio
-async def test_failed_miou_miou_miou_reports_error_and_resume_hint(
+async def test_failed_meow_meow_meow_reports_error_and_resume_hint(
     tmp_path: Path, fake_spawner: type[FakeSpawner]
 ) -> None:
     bad = 'meta = {"name": "bad", "description": "d"}\nawait agent("a")\nboom()'
     tool = make_tool()
     ctx = InvokeContext(tool_call_id="tc1", session_dir=tmp_path)
-    _stream, final = await collect(tool, MiouMiouMiouArgs(script=bad), ctx)
-    assert final.status is MiouMiouMiouStatus.FAILED
+    _stream, final = await collect(tool, MeowMeowMeowArgs(script=bad), ctx)
+    assert final.status is MeowMeowMeowStatus.FAILED
     assert final.error is not None
     assert "boom" in final.error
     extra = tool.get_result_extra(final)
@@ -177,17 +177,17 @@ async def test_failed_miou_miou_miou_reports_error_and_resume_hint(
 
 
 def test_script_arg_has_max_length_in_schema() -> None:
-    parameters = MiouMiouMiou.get_parameters()
+    parameters = MeowMeowMeow.get_parameters()
     script_schema = parameters["properties"]["script"]
     variants = script_schema.get("anyOf", [script_schema])
     assert any(v.get("maxLength") == 10_000 for v in variants)
 
 
 def test_tool_name_and_description() -> None:
-    assert MiouMiouMiou.get_name() == "miou_miou_miou"
-    description = MiouMiouMiou.get_full_description()
+    assert MeowMeowMeow.get_name() == "meow_meow_meow"
+    description = MeowMeowMeow.get_full_description()
     assert "deterministic" in description
-    parameters = MiouMiouMiou.get_parameters()
+    parameters = MeowMeowMeow.get_parameters()
     assert "script" in parameters["properties"]
     assert "resume_from_run_id" in parameters["properties"]
 
@@ -197,17 +197,17 @@ def test_call_display_parses_meta() -> None:
 
     event = ToolCallEvent(
         tool_call_id="tc1",
-        tool_name="miou_miou_miou",
-        tool_class=MiouMiouMiou,
-        args=MiouMiouMiouArgs(script=SCRIPT),
+        tool_name="meow_meow_meow",
+        tool_class=MeowMeowMeow,
+        args=MeowMeowMeowArgs(script=SCRIPT),
     )
-    display = MiouMiouMiou.get_call_display(event)
+    display = MeowMeowMeow.get_call_display(event)
     assert "demo" in display.summary
 
 
 def test_result_truncation() -> None:
     big = "x" * 100_000
-    bounded: Any = miou_miou_miou_module._bounded_result(big)
+    bounded: Any = meow_meow_meow_module._bounded_result(big)
     assert bounded["truncated"] is True
     assert len(bounded["preview"]) <= 40_000
-    assert miou_miou_miou_module._bounded_result({"a": 1}) == {"a": 1}
+    assert meow_meow_meow_module._bounded_result({"a": 1}) == {"a": 1}

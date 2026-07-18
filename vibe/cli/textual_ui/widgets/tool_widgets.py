@@ -23,12 +23,12 @@ from vibe.cli.textual_ui.widgets.diff_rendering import (
 )
 from vibe.cli.textual_ui.widgets.links import LinkStatic, link_content
 from vibe.cli.textual_ui.widgets.no_markup_static import NoMarkupStatic
-from vibe.core.mioumioumiou.models import MiouMiouMiouStatus
+from vibe.core.meowmeowmeow.models import MeowMeowMeowStatus
 from vibe.core.tools.builtins.ask_user_question import AskUserQuestionResult
 from vibe.core.tools.builtins.bash import BashArgs, BashResult
 from vibe.core.tools.builtins.edit import EditArgs, EditResult
 from vibe.core.tools.builtins.grep import GrepArgs, GrepResult
-from vibe.core.tools.builtins.miou_miou_miou import MiouMiouMiouArgs, MiouMiouMiouResult
+from vibe.core.tools.builtins.meow_meow_meow import MeowMeowMeowArgs, MeowMeowMeowResult
 from vibe.core.tools.builtins.read_file import ReadFileArgs, ReadFileResult
 from vibe.core.tools.builtins.todo import TodoArgs, TodoResult
 from vibe.core.tools.builtins.web_fetch import WebFetchResult
@@ -430,7 +430,7 @@ class WebFetchResultWidget(ToolResultWidget[WebFetchResult]):
         yield from self._footer()
 
 
-class MiouMiouMiouApprovalWidget(ToolApprovalWidget[MiouMiouMiouArgs]):
+class MeowMeowMeowApprovalWidget(ToolApprovalWidget[MeowMeowMeowArgs]):
     def compose(self) -> ComposeResult:
         if self.args.script_path:
             yield NoMarkupStatic(
@@ -458,7 +458,7 @@ class MiouMiouMiouApprovalWidget(ToolApprovalWidget[MiouMiouMiouArgs]):
             yield Markdown(_fenced_code_block(self.args.script, "python"))
 
 
-class MiouMiouMiouResultWidget(ToolResultWidget[MiouMiouMiouResult]):
+class MeowMeowMeowResultWidget(ToolResultWidget[MeowMeowMeowResult]):
     def compose(self) -> ComposeResult:
         if not self.result:
             yield from self._footer()
@@ -472,7 +472,7 @@ class MiouMiouMiouResultWidget(ToolResultWidget[MiouMiouMiouResult]):
             yield from self._yield_truncated_text(pretty)
         hint = (
             f"run {self.result.run_id} · journal saved for resume"
-            if self.result.status is not MiouMiouMiouStatus.COMPLETED
+            if self.result.status is not MeowMeowMeowStatus.COMPLETED
             else None
         )
         yield from self._footer(hint)
@@ -485,7 +485,7 @@ APPROVAL_WIDGETS: dict[str, type[ToolApprovalWidget]] = {
     "edit": EditApprovalWidget,
     "grep": GrepApprovalWidget,
     "todo": TodoApprovalWidget,
-    "miou_miou_miou": MiouMiouMiouApprovalWidget,
+    "meow_meow_meow": MeowMeowMeowApprovalWidget,
 }
 
 RESULT_WIDGETS: dict[str, type[ToolResultWidget]] = {
@@ -498,7 +498,7 @@ RESULT_WIDGETS: dict[str, type[ToolResultWidget]] = {
     "ask_user_question": AskUserQuestionResultWidget,
     "web_search": WebSearchResultWidget,
     "web_fetch": WebFetchResultWidget,
-    "miou_miou_miou": MiouMiouMiouResultWidget,
+    "meow_meow_meow": MeowMeowMeowResultWidget,
 }
 
 # Tools whose result message text is allowed to contain clickable URLs.

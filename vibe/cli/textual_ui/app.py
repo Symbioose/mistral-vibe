@@ -280,7 +280,7 @@ if TYPE_CHECKING:
     from vibe.cli.textual_ui.widgets.connector_auth_app import ConnectorAuthApp
     from vibe.cli.textual_ui.widgets.mcp_app import MCPApp
     from vibe.cli.textual_ui.widgets.mcp_oauth_app import MCPOAuthApp
-    from vibe.cli.textual_ui.widgets.miou_miou_miou import MiouMiouMiouCallMessage
+    from vibe.cli.textual_ui.widgets.meow_meow_meow import MeowMeowMeowCallMessage
     from vibe.core.agent_loop import AgentLoop
 
 
@@ -485,7 +485,7 @@ class VibeApp(App):  # noqa: PLR0904
         ),
         Binding("ctrl+backslash", "toggle_debug_console", "Debug Console", show=False),
         Binding(
-            "ctrl+w", "miou_miou_miou_inspector", "MiouMiouMiou Inspector", show=False
+            "ctrl+w", "meow_meow_meow_inspector", "MeowMeowMeow Inspector", show=False
         ),
     ]
 
@@ -4046,42 +4046,42 @@ class VibeApp(App):  # noqa: PLR0904
         return interrupted
 
     def action_interrupt(self) -> None:
-        from vibe.cli.textual_ui.widgets.miou_miou_miou_inspector import (
-            MiouMiouMiouInspectorScreen,
+        from vibe.cli.textual_ui.widgets.meow_meow_meow_inspector import (
+            MeowMeowMeowInspectorScreen,
         )
 
-        if isinstance(self.screen, MiouMiouMiouInspectorScreen):
+        if isinstance(self.screen, MeowMeowMeowInspectorScreen):
             self.screen.action_dismiss_inspector()
             return
         self._try_interrupt()
 
-    def action_miou_miou_miou_inspector(self) -> None:
-        from vibe.cli.textual_ui.widgets.miou_miou_miou import MiouMiouMiouCallMessage
-        from vibe.cli.textual_ui.widgets.miou_miou_miou_inspector import (
-            MiouMiouMiouInspectorScreen,
+    def action_meow_meow_meow_inspector(self) -> None:
+        from vibe.cli.textual_ui.widgets.meow_meow_meow import MeowMeowMeowCallMessage
+        from vibe.cli.textual_ui.widgets.meow_meow_meow_inspector import (
+            MeowMeowMeowInspectorScreen,
         )
 
-        if isinstance(self.screen, MiouMiouMiouInspectorScreen):
+        if isinstance(self.screen, MeowMeowMeowInspectorScreen):
             self.screen.action_dismiss_inspector()
             return
-        candidates = [w for w in MiouMiouMiouCallMessage.instances if w.is_attached]
+        candidates = [w for w in MeowMeowMeowCallMessage.instances if w.is_attached]
         if not candidates:
-            self.notify("No miou_miou_miou in this session yet", severity="information")
+            self.notify("No meow_meow_meow in this session yet", severity="information")
             return
-        self.push_screen(MiouMiouMiouInspectorScreen(candidates[-1]))
+        self.push_screen(MeowMeowMeowInspectorScreen(candidates[-1]))
 
-    def on_miou_miou_miou_call_message_inspect_requested(
-        self, message: MiouMiouMiouCallMessage.InspectRequested
+    def on_meow_meow_meow_call_message_inspect_requested(
+        self, message: MeowMeowMeowCallMessage.InspectRequested
     ) -> None:
-        from vibe.cli.textual_ui.widgets.miou_miou_miou_inspector import (
-            MiouMiouMiouInspectorScreen,
+        from vibe.cli.textual_ui.widgets.meow_meow_meow_inspector import (
+            MeowMeowMeowInspectorScreen,
         )
 
-        if isinstance(self.screen, MiouMiouMiouInspectorScreen):
+        if isinstance(self.screen, MeowMeowMeowInspectorScreen):
             return
         self.push_screen(
-            MiouMiouMiouInspectorScreen(
-                message.miou_miou_miou, initial_agent=message.agent_id
+            MeowMeowMeowInspectorScreen(
+                message.meow_meow_meow, initial_agent=message.agent_id
             )
         )
 
