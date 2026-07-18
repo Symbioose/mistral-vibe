@@ -257,6 +257,71 @@ async def test_auto_merge_reports_conflicts_and_leaves_checkout_pristine(
 
 
 @pytest.mark.asyncio
+async def test_worker_task_text_explains_the_worktree_sandbox(git_repo: Repo) -> None:
+    tool = make_task_tool()
+    captured: dict[str, str] = {}
+
+    def capturing_act_factory(kwargs: dict[str, Any]) -> Any:
+        async def act(task: str) -> AsyncGenerator[BaseEvent, None]:
+            captured["task"] = task
+            yield AssistantEvent(content="ok")
+
+        return act
+
+    factory, _ = make_fake_subagent_loop_factory(capturing_act_factory)
+    with patch(AGENT_LOOP_PATH, side_effect=factory):
+        await collect_result(
+            tool.run(TaskArgs(task="edit calc.py", agent="worker"), make_task_ctx())
+        )
+
+    task_text = captured["task"]
+    assert "Working directory:" in task_text
+    assert "isolated git worktree" in task_text
+    assert "relative paths" in task_text
+    assert task_text.endswith("edit calc.py")
+
+
+@pytest.mark.asyncio
+async def test_parent_bypass_tool_permissions_propagates_to_child(
+    git_repo: Repo,
+) -> None:
+    tool = make_task_tool()
+    ctx = make_task_ctx()
+    ctx.bypass_tool_permissions = True
+
+    with patch(AGENT_LOOP_PATH) as loop_cls:
+        captured: dict[str, Any] = {}
+
+        def factory(*_args: Any, **kwargs: Any) -> MagicMock:
+            captured.update(kwargs)
+            return _patched_writing_loop()[0](**kwargs)
+
+        loop_cls.side_effect = factory
+        await collect_result(tool.run(TaskArgs(task="write", agent="worker"), ctx))
+
+    assert captured["force_bypass_tool_permissions"] is True
+
+
+@pytest.mark.asyncio
+async def test_no_bypass_by_default(git_repo: Repo) -> None:
+    tool = make_task_tool()
+
+    with patch(AGENT_LOOP_PATH) as loop_cls:
+        captured: dict[str, Any] = {}
+
+        def factory(*_args: Any, **kwargs: Any) -> MagicMock:
+            captured.update(kwargs)
+            return _patched_writing_loop()[0](**kwargs)
+
+        loop_cls.side_effect = factory
+        await collect_result(
+            tool.run(TaskArgs(task="write", agent="worker"), make_task_ctx())
+        )
+
+    assert captured["force_bypass_tool_permissions"] is False
+
+
+@pytest.mark.asyncio
 async def test_no_changes_worker_reports_no_changes(git_repo: Repo) -> None:
     tool = make_task_tool()
 

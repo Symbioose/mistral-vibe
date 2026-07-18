@@ -69,6 +69,7 @@ class InvokeContext:
     session_id: str | None = field(default=None)
     mcp_pool: MCPConnectionPool | None = field(default=None)
     working_dir: Path | None = field(default=None)
+    bypass_tool_permissions: bool = field(default=False)
 
 
 class ToolError(Exception):
