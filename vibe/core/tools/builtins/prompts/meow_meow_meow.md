@@ -27,6 +27,13 @@ meow_meow_meow is a waste — use the `task` tool for that. Prompts you give eac
 must be self-contained briefs: context, exact question, expected output shape —
 the agent knows nothing except what you write.
 
+Briefs must name CONCRETE FILE PATHS, never just topics. "Audit vibe/core" produces
+answers from general knowledge; "Read vibe/core/agent_loop/_loop.py and
+vibe/core/session/*.py, then report ..." produces grounded findings. Use a scout
+agent (or a cheap ls/glob pass) in phase 1 to enumerate real paths, then embed
+those paths in every phase-2 brief. Require evidence in the output schema
+(e.g. a "file" and "lines" field per finding) so ungrounded claims are visible.
+
 ## Script format
 
 Scripts are plain **async Python** (top-level `await` is allowed; type annotations are fine). Every script must begin with a `meta` assignment — a PURE LITERAL dict (no variables, calls, or comprehensions):
