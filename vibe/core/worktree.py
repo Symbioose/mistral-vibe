@@ -159,18 +159,28 @@ class MergeReport:
     files_changed: tuple[str, ...]
 
 
-def commit_worktree(worktree: PreparedWorktree, message: str) -> str | None:
-    """Stage and commit everything in the worktree.
+# Build artifacts a worker generates while verifying its changes (running
+# tests, imports); committing them poisons the merge-back in repos that have
+# no .gitignore.
+_COMMIT_EXCLUDES = (
+    ":(exclude,glob)**/__pycache__/**",
+    ":(exclude,glob)**/*.pyc",
+    ":(exclude,glob)**/.DS_Store",
+)
 
-    Returns the commit sha, or None when the worktree is clean.
+
+def commit_worktree(worktree: PreparedWorktree, message: str) -> str | None:
+    """Stage and commit everything in the worktree except build artifacts.
+
+    Returns the commit sha, or None when there is nothing to commit.
 
     Raises:
         WorktreeError: If the worktree cannot be opened or the commit fails.
     """
     try:
         repo = Repo(worktree.root)
-        repo.git.add("-A")
-        if not repo.git.status("--porcelain").strip():
+        repo.git.add("-A", "--", ".", *_COMMIT_EXCLUDES)
+        if not repo.git.diff("--cached", "--name-only").strip():
             return None
         repo.git.commit("-m", message)
         return repo.head.commit.hexsha
