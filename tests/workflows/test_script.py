@@ -117,6 +117,59 @@ def test_shadowing_error_includes_line_number() -> None:
         parse_workflow_script(script)
 
 
+def test_missing_await_on_agent_call_rejected() -> None:
+    script = 'meta = {"name": "x", "description": "d"}\nvalue = agent("prompt")\n'
+    with pytest.raises(WorkflowScriptError, match="write 'await agent"):
+        parse_workflow_script(script)
+
+
+def test_missing_await_on_parallel_expr_rejected() -> None:
+    script = (
+        'meta = {"name": "x", "description": "d"}\nparallel([lambda: agent("a")])\n'
+    )
+    with pytest.raises(WorkflowScriptError, match="write 'await parallel"):
+        parse_workflow_script(script)
+
+
+def test_missing_await_in_async_def_rejected() -> None:
+    script = (
+        'meta = {"name": "x", "description": "d"}\n'
+        "async def stage(prev):\n"
+        "    return pipeline([prev], lambda x: x)\n"
+    )
+    with pytest.raises(WorkflowScriptError, match="write 'await pipeline"):
+        parse_workflow_script(script)
+
+
+def test_thunk_patterns_are_not_flagged() -> None:
+    script = (
+        'meta = {"name": "x", "description": "d"}\n'
+        'thunks = [lambda: agent("a"), lambda: agent("b")]\n'
+        "def make_thunk(prompt_text):\n"
+        "    return agent(prompt_text)\n"
+        "outs = await parallel(thunks)\n"
+        "return outs\n"
+    )
+    parsed = parse_workflow_script(script)
+    assert parsed.meta.name == "x"
+
+
+def test_all_errors_reported_together() -> None:
+    script = (
+        'meta = {"name": "x", "description": "d"}\n'
+        'result = "oops"\n'
+        'value = agent("prompt")\n'
+        "import os\n"
+    )
+    with pytest.raises(WorkflowScriptError) as exc_info:
+        parse_workflow_script(script)
+    message = str(exc_info.value)
+    assert "breaks these rules" in message
+    assert "'result' is a workflow primitive" in message
+    assert "write 'await agent" in message
+    assert "imports are unavailable" in message
+
+
 def test_banned_modules_raise() -> None:
     ns = build_script_globals({"log": lambda _m: None})
     with pytest.raises(WorkflowScriptError, match="unavailable"):

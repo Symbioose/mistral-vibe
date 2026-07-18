@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import builtins
+from collections.abc import Iterator
 from dataclasses import dataclass
 import json
 import math
@@ -112,8 +113,21 @@ def parse_workflow_script(source: str) -> ParsedScript:
     except SyntaxError as e:
         raise WorkflowScriptError(f"script has a syntax error: {e}") from e
 
-    meta = _extract_meta(tree)
-    _check_forbidden_constructs(tree)
+    errors: list[str] = []
+    meta: WorkflowMeta | None = None
+    try:
+        meta = _extract_meta(tree)
+    except WorkflowScriptError as e:
+        errors.append(str(e))
+    errors.extend(_collect_violations(tree))
+    if errors:
+        if len(errors) == 1:
+            raise WorkflowScriptError(errors[0])
+        raise WorkflowScriptError(
+            "the script breaks these rules:\n- " + "\n- ".join(errors)
+        )
+    if meta is None:
+        raise WorkflowScriptError("invalid meta")
 
     body = tree.body[1:] or [ast.Pass()]
     wrapper = ast.AsyncFunctionDef(
@@ -195,40 +209,85 @@ RESERVED_PRIMITIVES = frozenset({
 })
 
 
-def _check_forbidden_constructs(tree: ast.Module) -> None:
+_AWAITABLE_PRIMITIVES = frozenset({"agent", "parallel", "pipeline"})
+
+
+def _collect_violations(tree: ast.Module) -> list[str]:
+    errors: list[str] = []
     for node in ast.walk(tree):
+        line = getattr(node, "lineno", None)
+        location = f" (script line {line})" if line else ""
         if isinstance(node, (ast.Import, ast.ImportFrom)):
-            raise WorkflowScriptError(
-                "imports are unavailable in workflow scripts; "
+            errors.append(
+                f"imports are unavailable in workflow scripts{location}; "
                 "json, math and re are pre-loaded"
             )
-        if isinstance(node, ast.Attribute) and node.attr.startswith("__"):
-            raise WorkflowScriptError(
-                "dunder attribute access is unavailable in workflow scripts"
+        elif isinstance(node, ast.Attribute) and node.attr.startswith("__"):
+            errors.append(
+                f"dunder attribute access is unavailable in workflow scripts{location}"
             )
-        if isinstance(node, ast.Name) and node.id in {"__builtins__", "__import__"}:
-            raise WorkflowScriptError(f"{node.id} is unavailable in workflow scripts")
-        _check_primitive_shadowing(node)
+        elif isinstance(node, ast.Name) and node.id in {"__builtins__", "__import__"}:
+            errors.append(f"{node.id} is unavailable in workflow scripts{location}")
+        else:
+            shadowed = _shadowed_primitive(node)
+            if shadowed is not None:
+                errors.append(
+                    f"'{shadowed}' is a workflow primitive and cannot be used as a "
+                    f"variable, parameter, or function name{location} — rename it "
+                    f"(e.g. '{shadowed}_value')"
+                )
+    errors.extend(_collect_missing_awaits(tree))
+    return errors
 
 
-def _check_primitive_shadowing(node: ast.AST) -> None:
-    shadowed: str | None = None
+def _shadowed_primitive(node: ast.AST) -> str | None:
     match node:
         case ast.Name(id=name, ctx=ast.Store()) if name in RESERVED_PRIMITIVES:
-            shadowed = name
+            return name
         case ast.arg(arg=name) if name in RESERVED_PRIMITIVES:
-            shadowed = name
+            return name
         case (
             ast.FunctionDef(name=name)
             | ast.AsyncFunctionDef(name=name)
             | ast.ClassDef(name=name)
         ) if name in RESERVED_PRIMITIVES:
-            shadowed = name
-    if shadowed is not None:
-        lineno = getattr(node, "lineno", None)
-        location = f" (script line {lineno})" if lineno else ""
-        raise WorkflowScriptError(
-            f"'{shadowed}' is a workflow primitive and cannot be used as a "
-            f"variable, parameter, or function name{location} — rename it "
-            f"(e.g. '{shadowed}_value')"
-        )
+            return name
+    return None
+
+
+def _collect_missing_awaits(tree: ast.Module) -> list[str]:
+    errors: list[str] = []
+    for node in _iter_async_context(tree):
+        value: ast.expr | None = None
+        match node:
+            case ast.Expr(value=candidate) | ast.Return(value=candidate):
+                value = candidate
+            case ast.Assign(value=candidate) | ast.AnnAssign(value=candidate):
+                value = candidate
+        name = _bare_primitive_call(value)
+        if name is not None:
+            lineno = getattr(node, "lineno", 0)
+            errors.append(
+                f"'{name}(...)' returns an awaitable and its result is used "
+                f"without await (script line {lineno}) — "
+                f"write 'await {name}(...)'"
+            )
+    return errors
+
+
+def _iter_async_context(node: ast.AST) -> Iterator[ast.AST]:
+    # Sync defs and lambdas are thunk factories: a bare agent() call there is
+    # intentional (parallel()/pipeline() await it). Everything else runs in the
+    # top-level async context.
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, (ast.FunctionDef, ast.Lambda)):
+            continue
+        yield child
+        yield from _iter_async_context(child)
+
+
+def _bare_primitive_call(value: ast.expr | None) -> str | None:
+    match value:
+        case ast.Call(func=ast.Name(id=name)) if name in _AWAITABLE_PRIMITIVES:
+            return name
+    return None

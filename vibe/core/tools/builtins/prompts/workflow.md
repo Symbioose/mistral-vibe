@@ -61,6 +61,8 @@ Required meta fields: `name`, `description`. Optional: `phases`. Use the SAME ph
 
 RESERVED NAMES: `agent`, `parallel`, `pipeline`, `phase`, `log`, `result`, `args` are primitives — the script is REJECTED at parse time if any of them is used as a variable, parameter, or function name (e.g. `for result in ...` is invalid; use `for verdict in ...`).
 
+VALIDATION CONTRACT: every script is statically validated before a single agent runs — syntax, meta shape, reserved names, imports, forbidden modules, and missing `await` on `agent`/`parallel`/`pipeline` calls. A rejected script costs nothing; the error lists ALL violations with line numbers. Fix every listed item and re-invoke once — do not fix them one at a time.
+
 Subagents are told their final text IS the return value (not a human-facing message), so they return raw data. For structured output, use `schema` — validation happens at the call layer and the model retries on mismatch.
 
 ## Rules
