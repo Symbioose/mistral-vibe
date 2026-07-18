@@ -406,6 +406,11 @@ async def main() -> None:
                 (assets / asset).read_text(encoding="utf-8"), encoding="utf-8"
             )
         script_ref = (out_dir / "demo_audit.meow").resolve().as_posix()
+        vibe_cfg = corpus_dir / ".vibe"
+        vibe_cfg.mkdir(exist_ok=True)
+        (vibe_cfg / "config.toml").write_text(
+            "[tools.meow_meow_meow]\nmax_concurrency = 64\n", encoding="utf-8"
+        )
         (corpus_dir / "AGENTS.md").write_text(
             "# Regles du projet\n\n"
             "Pour tout audit ou analyse de ce dossier, procede EXACTEMENT ainsi, "
