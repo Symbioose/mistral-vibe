@@ -213,6 +213,53 @@ def test_too_many_lines_rejected() -> None:
         parse_meow_meow_meow_script(script)
 
 
+def test_sequential_agent_await_in_for_loop_rejected() -> None:
+    script = (
+        'meta = {"name": "x", "description": "d"}\n'
+        "for item in [1, 2]:\n"
+        "    out = await agent(f'p{item}')\n"
+    )
+    with pytest.raises(MeowMeowMeowScriptError, match="ONE BY ONE"):
+        parse_meow_meow_meow_script(script)
+
+
+def test_agent_await_in_while_loop_allowed() -> None:
+    script = (
+        'meta = {"name": "x", "description": "d"}\n'
+        "dry = 0\n"
+        "while dry < 2:\n"
+        '    out = await agent("refine")\n'
+        "    dry += 1\n"
+        "return None\n"
+    )
+    parsed = parse_meow_meow_meow_script(script)
+    assert parsed.meta.name == "x"
+
+
+def test_parallel_await_in_for_loop_allowed() -> None:
+    script = (
+        'meta = {"name": "x", "description": "d"}\n'
+        "for group in [[1], [2]]:\n"
+        "    outs = await parallel([(lambda g=g: agent(f'p{g}')) for g in group])\n"
+        "return None\n"
+    )
+    parsed = parse_meow_meow_meow_script(script)
+    assert parsed.meta.name == "x"
+
+
+def test_thunks_built_in_for_loop_allowed() -> None:
+    script = (
+        'meta = {"name": "x", "description": "d"}\n'
+        "thunks = []\n"
+        "for item in [1, 2]:\n"
+        "    thunks.append(lambda i=item: agent(f'p{i}'))\n"
+        "outs = await parallel(thunks)\n"
+        "return outs\n"
+    )
+    parsed = parse_meow_meow_meow_script(script)
+    assert parsed.meta.name == "x"
+
+
 def test_all_errors_reported_together() -> None:
     script = (
         'meta = {"name": "x", "description": "d"}\n'
