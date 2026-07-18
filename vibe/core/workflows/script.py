@@ -184,6 +184,17 @@ def _extract_meta(tree: ast.Module) -> WorkflowMeta:
         raise WorkflowScriptError(f"invalid meta: {e}") from e
 
 
+RESERVED_PRIMITIVES = frozenset({
+    "agent",
+    "parallel",
+    "pipeline",
+    "phase",
+    "log",
+    "result",
+    "args",
+})
+
+
 def _check_forbidden_constructs(tree: ast.Module) -> None:
     for node in ast.walk(tree):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
@@ -197,3 +208,27 @@ def _check_forbidden_constructs(tree: ast.Module) -> None:
             )
         if isinstance(node, ast.Name) and node.id in {"__builtins__", "__import__"}:
             raise WorkflowScriptError(f"{node.id} is unavailable in workflow scripts")
+        _check_primitive_shadowing(node)
+
+
+def _check_primitive_shadowing(node: ast.AST) -> None:
+    shadowed: str | None = None
+    match node:
+        case ast.Name(id=name, ctx=ast.Store()) if name in RESERVED_PRIMITIVES:
+            shadowed = name
+        case ast.arg(arg=name) if name in RESERVED_PRIMITIVES:
+            shadowed = name
+        case (
+            ast.FunctionDef(name=name)
+            | ast.AsyncFunctionDef(name=name)
+            | ast.ClassDef(name=name)
+        ) if name in RESERVED_PRIMITIVES:
+            shadowed = name
+    if shadowed is not None:
+        lineno = getattr(node, "lineno", None)
+        location = f" (script line {lineno})" if lineno else ""
+        raise WorkflowScriptError(
+            f"'{shadowed}' is a workflow primitive and cannot be used as a "
+            f"variable, parameter, or function name{location} — rename it "
+            f"(e.g. '{shadowed}_value')"
+        )

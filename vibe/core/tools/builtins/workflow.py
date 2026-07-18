@@ -6,7 +6,7 @@ from contextlib import aclosing, suppress
 import json
 from pathlib import Path
 import tempfile
-from typing import Any
+from typing import TYPE_CHECKING, Any
 import uuid
 
 from pydantic import BaseModel, Field
@@ -52,6 +52,9 @@ from vibe.core.workflows.models import (
 )
 from vibe.core.workflows.runtime import WorkflowRuntime
 from vibe.core.workflows.script import parse_workflow_script
+
+if TYPE_CHECKING:
+    from vibe.core.agent_loop import AgentLoop
 
 _MAX_RESULT_CHARS = 40_000
 _SUBAGENT_PREAMBLE = (
@@ -105,9 +108,9 @@ class _AgentLoopSpawner:
         self._ctx = ctx
         self._config = config
 
-    async def run(
-        self, request: SubagentRequest, on_progress: Callable[[str], None]
-    ) -> SubagentOutcome:
+    def _build_loop(
+        self, agent_name: str, request: SubagentRequest
+    ) -> AgentLoop | SubagentOutcome:
         # Deferred: importing AgentLoop at module scope would defeat the TUI's
         # lazy startup (this module is imported by the result-widget registry).
         from vibe.core.agent_loop import AgentLoop
@@ -118,7 +121,6 @@ class _AgentLoopSpawner:
             return SubagentOutcome(
                 success=False, error="workflow requires agent_manager in context"
             )
-        agent_name = request.agent_name or self._config.default_agent
         try:
             profile = ctx.agent_manager.get_agent(agent_name)
         except ValueError:
@@ -155,6 +157,25 @@ class _AgentLoopSpawner:
             loop.parent_session_id = ctx.session_id
         if ctx.approval_callback:
             loop.set_approval_callback(ctx.approval_callback)
+        return loop
+
+    @staticmethod
+    def _emit_progress(event: object, on_progress: Callable[[str], None]) -> None:
+        if isinstance(event, ToolCallEvent) and event.tool_class:
+            adapter = ToolUIDataAdapter(event.tool_class)
+            on_progress(f"▸ {adapter.get_call_display(event).summary}")
+        elif isinstance(event, ToolResultEvent) and event.result and event.tool_class:
+            adapter = ToolUIDataAdapter(event.tool_class)
+            display = adapter.get_result_display(event)
+            on_progress(f"{event.tool_name}: {display.message}")
+
+    async def run(
+        self, request: SubagentRequest, on_progress: Callable[[str], None]
+    ) -> SubagentOutcome:
+        agent_name = request.agent_name or self._config.default_agent
+        loop = self._build_loop(agent_name, request)
+        if isinstance(loop, SubagentOutcome):
+            return loop
 
         prompt = _SUBAGENT_PREAMBLE + request.prompt
         final_message: list[str] = []
@@ -171,11 +192,8 @@ class _AgentLoopSpawner:
                             current_message_id = event.message_id
                             final_message.clear()
                         final_message.append(event.content)
-                    elif isinstance(event, ToolResultEvent):
-                        if event.result and event.tool_class:
-                            adapter = ToolUIDataAdapter(event.tool_class)
-                            display = adapter.get_result_display(event)
-                            on_progress(f"{event.tool_name}: {display.message}")
+                    else:
+                        self._emit_progress(event, on_progress)
             turns_used = sum(msg.role == Role.assistant for msg in loop.messages)
         except asyncio.CancelledError:
             raise
@@ -370,9 +388,9 @@ def _humanize_event(event: WorkflowEvent) -> str | None:
             message = (
                 f"{label} — replayed from journal" if cached else f"{label} — started"
             )
-        case AgentFinishedEvent(
-            label=label, status=status, duration_s=duration
-        ) if status in _STATUS_VERBS:
+        case AgentFinishedEvent(label=label, status=status, duration_s=duration) if (
+            status in _STATUS_VERBS
+        ):
             suffix = f" in {duration:.0f}s" if duration else ""
             message = f"{label} — {_STATUS_VERBS[status]}{suffix}"
         case WorkflowLogEvent(message=message):

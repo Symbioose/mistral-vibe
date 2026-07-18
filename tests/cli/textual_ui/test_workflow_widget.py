@@ -52,7 +52,7 @@ async def test_tree_builds_phases_and_rows() -> None:
         assert len(phases) == 1
         rows = list(widget.query(WorkflowAgentRow))
         assert len(rows) == 2
-        assert rows[0].get_content() == "review:bugs · 12s"
+        assert rows[0].get_content() == "▸ review:bugs · 12s"
         assert rows[0]._state is IndicatorState.SUCCESS
         assert rows[1].get_content() == "review:perf · boom"
         assert rows[1]._state is IndicatorState.ERROR
@@ -102,6 +102,60 @@ async def test_settle_mutes_unfinished_rows() -> None:
         rows = list(widget.query(WorkflowAgentRow))
         assert rows[0].finished
         assert rows[0]._state is IndicatorState.MUTED
+
+
+@pytest.mark.asyncio
+async def test_activity_tail_visible_while_running_hidden_after() -> None:
+    app = _Harness()
+    async with app.run_test() as pilot:
+        widget = WorkflowCallMessage(tool_name="workflow")
+        await app.mount(widget)
+        await widget.handle_workflow_event(_started(1, "deep-agent"))
+        for i in range(4):
+            await widget.handle_workflow_event({
+                "kind": "agent_progress",
+                "agent_id": 1,
+                "message": f"▸ step {i}",
+            })
+        await pilot.pause()
+        row = list(widget.query(WorkflowAgentRow))[0]
+        activity = row._activity
+        assert activity is not None
+        assert activity.display is True
+        visible = [c for c in activity.children if c.display]
+        assert len(visible) == 2
+        assert str(visible[-1].render()) == "▸ step 3"
+
+        await widget.handle_workflow_event(_finished(1))
+        await pilot.pause()
+        assert activity.display is False
+
+        row._expanded = True
+        row._refresh_activity()
+        visible = [c for c in activity.children if c.display]
+        assert len(visible) == 4
+        assert activity.display is True
+
+
+@pytest.mark.asyncio
+async def test_activity_history_is_capped() -> None:
+    app = _Harness()
+    async with app.run_test() as pilot:
+        widget = WorkflowCallMessage(tool_name="workflow")
+        await app.mount(widget)
+        await widget.handle_workflow_event(_started(1, "busy-agent"))
+        for i in range(60):
+            await widget.handle_workflow_event({
+                "kind": "agent_progress",
+                "agent_id": 1,
+                "message": f"line {i}",
+            })
+        await pilot.pause()
+        row = list(widget.query(WorkflowAgentRow))[0]
+        activity = row._activity
+        assert activity is not None
+        assert len(activity.children) == 50
+        assert str(activity.children[-1].render()) == "line 59"
 
 
 @pytest.mark.asyncio

@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from textual import events
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 
+from vibe.cli.textual_ui.widgets.collapsible import ClickWithoutDragMixin
 from vibe.cli.textual_ui.widgets.links import LinkStatic
 from vibe.cli.textual_ui.widgets.no_markup_static import (
     NoMarkupStatic,
@@ -17,25 +19,78 @@ from vibe.core.workflows.models import AgentRunStatus
 _MAX_LOG_LINES = 3
 _KEEP_FINISHED_ROWS_PER_PHASE = 6
 _PROGRESS_MAX_LEN = 48
+_MAX_ACTIVITY_LINES = 50
+_RUNNING_ACTIVITY_TAIL = 2
 
 
-class WorkflowAgentRow(StatusMessage):
+class WorkflowAgentRow(ClickWithoutDragMixin, StatusMessage):
     def __init__(self, label: str) -> None:
         self._label = label
         self._detail = ""
+        self._activity: Vertical | None = None
+        self._activity_count = 0
+        self._expanded = False
         super().__init__()
         self.add_class("workflow-agent-row")
         self.finished = False
 
-    def get_content(self) -> str:
-        if self._detail:
-            return f"{self._label} · {self._detail}"
-        return self._label
+    def compose(self) -> ComposeResult:
+        with Horizontal(classes="workflow-agent-header"):
+            self._indicator_widget = NonSelectableStatic(
+                self._spinner.current_frame(), classes="status-indicator-icon"
+            )
+            yield self._indicator_widget
+            self._text_widget = NoMarkupStatic("", classes="status-indicator-text")
+            yield self._text_widget
+        self._activity = Vertical(classes="workflow-agent-activity")
+        self._activity.display = False
+        yield self._activity
 
-    def set_progress(self, message: str) -> None:
-        if len(message) > _PROGRESS_MAX_LEN:
-            message = message[: _PROGRESS_MAX_LEN - 1] + "…"
-        self._detail = message
+    def get_content(self) -> str:
+        marker = ""
+        if self._activity_count:
+            marker = "▾ " if self._expanded else "▸ "
+        if self._detail:
+            return f"{marker}{self._label} · {self._detail}"
+        return f"{marker}{self._label}"
+
+    async def add_activity(self, message: str) -> None:
+        self._detail = (
+            message
+            if len(message) <= _PROGRESS_MAX_LEN
+            else message[: _PROGRESS_MAX_LEN - 1] + "…"
+        )
+        if self._activity is not None:
+            await self._activity.mount(
+                NoMarkupStatic(message, classes="workflow-activity-line")
+            )
+            self._activity_count += 1
+            children = list(self._activity.children)
+            for extra in children[:-_MAX_ACTIVITY_LINES]:
+                self._activity_count -= 1
+                await extra.remove()
+        self._refresh_activity()
+        self.update_display()
+
+    def _refresh_activity(self) -> None:
+        if self._activity is None:
+            return
+        children = list(self._activity.children)
+        if self._expanded:
+            visible = len(children)
+        elif not self.finished:
+            visible = min(_RUNNING_ACTIVITY_TAIL, len(children))
+        else:
+            visible = 0
+        for index, child in enumerate(children):
+            child.display = index >= len(children) - visible
+        self._activity.display = visible > 0
+
+    async def on_click(self, event: events.Click) -> None:
+        if self._click_is_passive(event) or not self._activity_count:
+            return
+        self._expanded = not self._expanded
+        self._refresh_activity()
         self.update_display()
 
     def finish(
@@ -66,6 +121,7 @@ class WorkflowAgentRow(StatusMessage):
                 self.settle(IndicatorState.ERROR)
             case _:
                 self.settle(IndicatorState.MUTED)
+        self._refresh_activity()
 
 
 class WorkflowPhaseGroup(Vertical):
@@ -163,7 +219,7 @@ class WorkflowCallMessage(ToolCallMessage):
             case "agent_progress":
                 row = self._agents.get(data["agent_id"])
                 if row is not None and not row.finished:
-                    row.set_progress(data["message"])
+                    await row.add_activity(data["message"])
             case "agent_finished":
                 await self._on_agent_finished(data)
             case "log":

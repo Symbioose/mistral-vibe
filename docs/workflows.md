@@ -28,7 +28,7 @@ results = await pipeline(
                     schema=FINDINGS_SCHEMA),
     verify_stage,
 )
-result({"confirmed": [f for g in results if g for f in g if f and f["is_real"]]})
+return {"confirmed": [f for g in results if g for f in g if f and f["is_real"]]}
 ```
 
 ## Script API
@@ -40,7 +40,7 @@ result({"confirmed": [f for g in results if g for f in g if f and f["is_real"]]}
 | `await pipeline(items, *stages)` | Each item flows through all stages independently — no barrier between stages. Stage signature `(prev, item, index)`; trailing params optional. A failing stage drops that item to `None`. |
 | `phase(title)` | Start a display phase; later `agent()` calls group under it. |
 | `log(message)` | Emit a narrator line in the TUI (`print` is aliased to this). |
-| `result(value)` | Set the workflow's JSON return value (top-level `return` also works). |
+| `return value` | Top-level return sets the workflow's JSON return value (`result(value)` is an alias). |
 | `args` | The value passed in the tool's `args` input, verbatim. |
 
 ## Guarantees and limits
@@ -48,6 +48,9 @@ result({"confirmed": [f for g in results if g for f in g if f and f["is_real"]]}
 - Scripts are validated before execution: `meta` must be a pure-literal dict,
   imports are rejected (`json`, `math`, `re` are pre-loaded), and wall-clock /
   randomness / filesystem access are unavailable (they would break resume).
+- Primitive names (`agent`, `parallel`, `pipeline`, `phase`, `log`, `result`,
+  `args`) are reserved: using one as a variable, parameter, or function name is
+  rejected at parse time — before any agent is spawned — with the offending line.
 - Concurrency is capped at `min(16, cpu - 2)` per workflow (configurable via
   `max_concurrency` in the tool config); excess `agent()` calls queue.
 - Lifetime cap of 1000 `agent()` calls per workflow; a single `parallel()` /

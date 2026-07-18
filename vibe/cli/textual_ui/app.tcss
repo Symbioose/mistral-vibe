@@ -825,6 +825,27 @@ StatusMessage {
     height: auto;
 }
 
+.workflow-agent-header {
+    width: 100%;
+    height: auto;
+}
+
+.workflow-agent-activity {
+    width: 100%;
+    height: auto;
+    padding: 0 0 0 2;
+}
+
+.workflow-activity-line {
+    width: 100%;
+    height: auto;
+    color: $text-muted;
+
+    &:ansi {
+        text-style: dim;
+    }
+}
+
 .workflow-logs {
     width: 100%;
     height: auto;

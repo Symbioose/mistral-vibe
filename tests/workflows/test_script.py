@@ -85,6 +85,38 @@ def test_top_level_await_and_return_compile() -> None:
     assert parsed.meta.name == "x"
 
 
+def test_shadowing_primitive_variable_rejected() -> None:
+    script = (
+        'meta = {"name": "x", "description": "d"}\n'
+        "for result in [1, 2]:\n    log(result)\n"
+    )
+    with pytest.raises(WorkflowScriptError, match="'result' is a workflow primitive"):
+        parse_workflow_script(script)
+
+
+def test_shadowing_primitive_parameter_rejected() -> None:
+    script = (
+        'meta = {"name": "x", "description": "d"}\n'
+        "def helper(agent):\n    return agent\n"
+    )
+    with pytest.raises(WorkflowScriptError, match="'agent' is a workflow primitive"):
+        parse_workflow_script(script)
+
+
+def test_shadowing_primitive_function_name_rejected() -> None:
+    script = (
+        'meta = {"name": "x", "description": "d"}\nasync def phase():\n    return 1\n'
+    )
+    with pytest.raises(WorkflowScriptError, match="'phase' is a workflow primitive"):
+        parse_workflow_script(script)
+
+
+def test_shadowing_error_includes_line_number() -> None:
+    script = 'meta = {"name": "x", "description": "d"}\nx = 1\nresult = "oops"\n'
+    with pytest.raises(WorkflowScriptError, match="script line 3"):
+        parse_workflow_script(script)
+
+
 def test_banned_modules_raise() -> None:
     ns = build_script_globals({"log": lambda _m: None})
     with pytest.raises(WorkflowScriptError, match="unavailable"):
