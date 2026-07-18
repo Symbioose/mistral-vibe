@@ -183,6 +183,7 @@ AGENTS_MD = """\
 
 FILES = {
     "AGENTS.md": AGENTS_MD,
+    ".vibe/config.toml": "[tools.task]\nmax_parallel = 12\n",
     ".gitignore": "__pycache__/\n*.pyc\n",
     "tests/__init__.py": "",
     "geometry.py": GEOMETRY,
@@ -217,7 +218,9 @@ def main() -> None:
     for rel, content in files.items():
         if parsed.no_agents and rel == "AGENTS.md":
             continue
-        (out / rel).write_text(content, encoding="utf-8", newline="\n")
+        target = out / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8", newline="\n")
 
     def git(*cmd: str) -> None:
         subprocess.run(["git", *cmd], cwd=out, check=True, capture_output=True)
