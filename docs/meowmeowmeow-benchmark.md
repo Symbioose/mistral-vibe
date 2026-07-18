@@ -87,3 +87,41 @@ uv run python scripts/benchmark_meowmeowmeow.py --files 96 --bugs 48 --batch 3 -
 
 Single-run measurements (n=1 per condition) on one machine/network; treat
 small deltas as noise, the ×5–×14 structural gaps as signal.
+
+## Live demo runbook
+
+What runs where: the benchmark drives the REAL engine — real Mistral API
+calls, one real `AgentLoop` (explore profile) per agent, the real
+MeowMeowMeow runtime/journal — headless, without the TUI wrapper. The audited
+codebase is a synthetic corpus the script generates deterministically
+(`m00.py`…`mNN.py`, small utility functions, planted logic bugs at known
+positions), which is what makes accuracy verifiable instead of declared.
+
+**Script mode** (numbers on screen fast — skips the 8-minute baseline and
+quotes it from this report):
+
+```
+uv run python scripts/benchmark_meowmeowmeow.py --files 96 --bugs 48 --batch 3 \
+  --fillers 14 --concurrency 16 --skip-baseline --out demo_bench
+```
+
+~40 s for the fan-out, then the resume line lands at 0 tokens / 0.0 s.
+Corpus and ground truth are in `demo_bench/corpus/`; results in
+`demo_bench/results.json`.
+
+**TUI mode** (the spectacular one): generate a corpus, then open vibe on it
+and let the model orchestrate live — phases plan upfront, parallel agents
+ticking, ctrl+w to dive into any agent:
+
+```
+uv run python scripts/benchmark_meowmeowmeow.py --files 24 --bugs 12 --fillers 14 \
+  --corpus-only --out demo
+cd demo/corpus
+uv run --project ../.. vibe
+```
+
+`demo/ground_truth.json` holds the exact planted list — reveal it at the end
+to verify the model's findings in front of the audience.
+
+Then prompt: « Audite tous les fichiers de ce dossier : trouve les bugs de
+logique, vérifie chaque finding, rapporte {file, function, description}. »

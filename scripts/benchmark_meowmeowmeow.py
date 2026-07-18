@@ -385,6 +385,8 @@ async def main() -> None:
     parser.add_argument("--batch", type=int, default=BATCH_SIZE)
     parser.add_argument("--fillers", type=int, default=0)
     parser.add_argument("--concurrency", type=int, default=None)
+    parser.add_argument("--skip-baseline", action="store_true")
+    parser.add_argument("--corpus-only", action="store_true")
     parsed_args = parser.parse_args()
     out_dir = Path(parsed_args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -392,13 +394,21 @@ async def main() -> None:
     planted = plant_bugs(parsed_args.files, parsed_args.bugs)
     corpus_dir = out_dir / "corpus"
     files = build_corpus(corpus_dir, parsed_args.files, planted, parsed_args.fillers)
-    config = load_config()
     print(f"corpus: {len(files)} files, {len(planted)} planted bugs", flush=True)
+    if parsed_args.corpus_only:
+        truth = [{"file": f"m{i:02d}.py", "function": fn} for i, fn in planted]
+        (out_dir / "ground_truth.json").write_text(
+            json.dumps(truth, indent=2), encoding="utf-8"
+        )
+        print(f"corpus written to {corpus_dir} (ground_truth.json alongside)")
+        return
+    config = load_config()
 
     results: list[dict[str, Any]] = []
-    baseline = await bench_baseline(files, config, planted)
-    results.append(baseline.score())
-    print(json.dumps(results[-1]), flush=True)
+    if not parsed_args.skip_baseline:
+        baseline = await bench_baseline(files, config, planted)
+        results.append(baseline.score())
+        print(json.dumps(results[-1]), flush=True)
 
     meow = await bench_meow(
         files,
