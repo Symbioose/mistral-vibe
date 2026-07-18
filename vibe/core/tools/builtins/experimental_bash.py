@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import errno
@@ -199,6 +199,42 @@ def _extract_commands(command: str) -> list[str]:
     return commands
 
 
+def _extract_redirect_targets(command: str) -> list[str]:
+    """Collect the file targets of output redirections (``>``, ``>>``).
+
+    Redirections write through *any* binary — including read-only allowlisted
+    ones like ``cat`` — so their targets must be permission-checked like the
+    path arguments of file-manipulating commands.
+    """
+    parser = _get_parser()
+    tree = parser.parse(command.encode("utf-8"))
+    targets: list[str] = []
+
+    def find_redirects(node: Node) -> None:
+        if node.type == "file_redirect":
+            destination = node.child_by_field_name("destination")
+            if destination is not None and destination.text is not None:
+                targets.append(destination.text.decode("utf-8"))
+        for child in node.children:
+            find_redirects(child)
+
+    find_redirects(tree.root_node)
+    return targets
+
+
+_QUOTE_PAIR_LEN = 2
+
+
+def _unquote(token: str) -> str:
+    if (
+        len(token) >= _QUOTE_PAIR_LEN
+        and token[0] == token[-1]
+        and token[0] in {'"', "'"}
+    ):
+        return token[1:-1]
+    return token
+
+
 def _get_shell_executable() -> str | None:
     if is_windows():
         return None
@@ -325,11 +361,14 @@ def _looks_like_path(token: str) -> bool:
 
 
 def _collect_outside_dirs(
-    command_parts: list[str], command_cwd: Path | None = None
+    command_parts: list[str],
+    command_cwd: Path | None = None,
+    workdir: Path | None = None,
+    redirect_targets: Sequence[str] = (),
 ) -> set[str]:
-    command_cwd = Path.cwd() if command_cwd is None else command_cwd
+    command_cwd = (workdir or Path.cwd()) if command_cwd is None else command_cwd
     dirs: set[str] = set()
-    if not is_path_within_workdir(str(command_cwd)) and not is_scratchpad_path(
+    if not is_path_within_workdir(str(command_cwd), workdir) and not is_scratchpad_path(
         str(command_cwd)
     ):
         dirs.add(str(command_cwd))
@@ -352,13 +391,41 @@ def _collect_outside_dirs(
                 resolved = command_cwd / resolved
             resolved = resolved.resolve()
 
-            if is_path_within_workdir(str(resolved)):
+            if is_path_within_workdir(str(resolved), workdir):
                 continue
             if is_scratchpad_path(str(resolved)):
                 continue
 
             parent = str(resolved) if resolved.is_dir() else str(resolved.parent)
             dirs.add(parent)
+
+    return dirs | _redirect_outside_dirs(redirect_targets, command_cwd, workdir)
+
+
+def _redirect_outside_dirs(
+    redirect_targets: Sequence[str], command_cwd: Path, workdir: Path | None
+) -> set[str]:
+    dirs: set[str] = set()
+    for raw_target in redirect_targets:
+        target = _unquote(raw_target)
+        # File-descriptor duplication (2>&1) and the null device never write
+        # to project files.
+        if not target or target.startswith(("&", "/dev/")) or target.isdigit():
+            continue
+        if "$" in target or "`" in target:
+            # The shell expands this to a path we cannot resolve statically:
+            # require approval rather than guess.
+            dirs.add(target)
+            continue
+        resolved = Path(target).expanduser()
+        if not resolved.is_absolute():
+            resolved = command_cwd / resolved
+        resolved = resolved.resolve()
+        if is_path_within_workdir(str(resolved), workdir) or is_scratchpad_path(
+            str(resolved)
+        ):
+            continue
+        dirs.add(str(resolved) if resolved.is_dir() else str(resolved.parent))
     return dirs
 
 
@@ -1433,9 +1500,14 @@ class ExperimentalBash(
         command_cwd = (
             Path(args.cwd).expanduser().resolve()
             if args.cwd is not None
-            else Path.cwd()
+            else self.workdir
         )
-        outside_dirs = _collect_outside_dirs(command_parts, command_cwd)
+        outside_dirs = _collect_outside_dirs(
+            command_parts,
+            command_cwd,
+            self.workdir,
+            _extract_redirect_targets(args.command),
+        )
         context_required = self._build_context_permissions(args)
         if (
             self._is_unconditionally_allowed(
@@ -1468,7 +1540,7 @@ class ExperimentalBash(
         timeout = self._resolve_timeout(requested_timeout)
         max_bytes = self.config.max_output_bytes
         try:
-            cwd = Path(args.cwd).expanduser().resolve() if args.cwd else Path.cwd()
+            cwd = Path(args.cwd).expanduser().resolve() if args.cwd else self.workdir
             shell = _manager().resolve_shell(args.shell, self.config.shell)
             session = await asyncio.to_thread(
                 _manager().start,

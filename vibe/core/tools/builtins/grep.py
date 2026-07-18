@@ -162,6 +162,7 @@ class Grep(
             denylist=self.config.denylist,
             config_permission=self.config.permission,
             sensitive_patterns=self.config.sensitive_patterns,
+            workdir=self.workdir,
         )
 
     def _detect_backend(self) -> GrepBackend:
@@ -194,7 +195,7 @@ class Grep(
 
         path_obj = Path(args.path).expanduser()
         if not path_obj.is_absolute():
-            path_obj = Path.cwd() / path_obj
+            path_obj = self.workdir / path_obj
 
         if not path_obj.exists():
             raise ToolError(f"Path does not exist: {args.path}")
@@ -202,7 +203,7 @@ class Grep(
     def _collect_exclude_patterns(self) -> list[str]:
         patterns = list(self.config.exclude_patterns)
 
-        codeignore_path = Path.cwd() / self.config.codeignore_file
+        codeignore_path = self.workdir / self.config.codeignore_file
         if codeignore_path.is_file():
             patterns.extend(self._load_codeignore_patterns(codeignore_path))
 
@@ -279,7 +280,10 @@ class Grep(
     async def _execute_search(self, cmd: list[str]) -> str:
         try:
             proc = await asyncio.create_subprocess_exec(
-                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=str(self.workdir),
             )
 
             try:

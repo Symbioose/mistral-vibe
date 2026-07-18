@@ -12,21 +12,25 @@ from vibe.core.tools.permissions import (
 )
 
 
-def _make_absolute(path_str: str) -> Path:
+def _make_absolute(path_str: str, workdir: Path | None = None) -> Path:
     path = Path(path_str).expanduser()
     if not path.is_absolute():
-        path = Path.cwd() / path
+        path = (workdir or Path.cwd()) / path
     return path
 
 
 def resolve_path_permission(
-    path_str: str, *, allowlist: list[str], denylist: list[str]
+    path_str: str,
+    *,
+    allowlist: list[str],
+    denylist: list[str],
+    workdir: Path | None = None,
 ) -> PermissionContext | None:
     """Resolve permission for a file path against glob patterns.
 
     Returns NEVER on denylist match, ALWAYS on allowlist match, None otherwise.
     """
-    file_str = str(_make_absolute(path_str).resolve())
+    file_str = str(_make_absolute(path_str, workdir).resolve())
 
     for pattern in denylist:
         if fnmatch.fnmatch(file_str, pattern):
@@ -39,18 +43,18 @@ def resolve_path_permission(
     return None
 
 
-def is_path_within_workdir(path_str: str) -> bool:
-    """Return True if the resolved path is inside cwd or any project root.
+def is_path_within_workdir(path_str: str, workdir: Path | None = None) -> bool:
+    """Return True if the resolved path is inside the workdir or any project root.
 
     Project roots come from the harness manager (trusted cwd + ``--add-dir``).
-    cwd is always in-bounds, even when the manager isn't initialized or when
-    the project source is disabled.
+    The workdir (cwd by default) is always in-bounds, even when the manager
+    isn't initialized or when the project source is disabled.
     """
     try:
-        resolved = _make_absolute(path_str).resolve()
+        resolved = _make_absolute(path_str, workdir).resolve()
     except (ValueError, OSError):
         return False
-    if resolved.is_relative_to(Path.cwd().resolve()):
+    if resolved.is_relative_to((workdir or Path.cwd()).resolve()):
         return True
     from vibe.core.config.harness_files import get_harness_files_manager
 
@@ -69,6 +73,7 @@ def resolve_file_tool_permission(
     denylist: list[str],
     config_permission: ToolPermission,
     sensitive_patterns: list[str],
+    workdir: Path | None = None,
 ) -> PermissionContext | None:
     """Resolve permission for a file-based tool invocation.
 
@@ -80,14 +85,14 @@ def resolve_file_tool_permission(
 
     if (
         result := resolve_path_permission(
-            path_str, allowlist=allowlist, denylist=denylist
+            path_str, allowlist=allowlist, denylist=denylist, workdir=workdir
         )
     ) is not None:
         return result
 
     required: list[RequiredPermission] = []
 
-    file_path = _make_absolute(path_str)
+    file_path = _make_absolute(path_str, workdir)
     file_str = str(file_path.resolve())
 
     for pattern in sensitive_patterns:
@@ -102,7 +107,7 @@ def resolve_file_tool_permission(
             )
             break
 
-    if not is_path_within_workdir(path_str):
+    if not is_path_within_workdir(path_str, workdir):
         if config_permission == ToolPermission.NEVER:
             return PermissionContext(permission=ToolPermission.NEVER)
         resolved = file_path.resolve()

@@ -83,6 +83,7 @@ class Edit(
             denylist=self.config.denylist,
             config_permission=self.config.permission,
             sensitive_patterns=self.config.sensitive_patterns,
+            workdir=self.workdir,
         )
 
     def get_file_snapshot(self, args: EditArgs) -> FileSnapshot | None:
@@ -211,7 +212,7 @@ class Edit(
 
         file_path = Path(file_path_str).expanduser()
         if not file_path.is_absolute():
-            file_path = Path.cwd() / file_path
+            file_path = self.workdir / file_path
         file_path = file_path.resolve()
 
         if not file_path.exists():

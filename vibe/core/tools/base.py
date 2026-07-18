@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from vibe.core.checkpoints import FileSnapshot, FileState
 from vibe.core.logger import logger
-from vibe.core.types import ToolStreamEvent
+from vibe.core.types import BaseEvent, ToolStreamEvent
 from vibe.core.utils.io import read_safe
 
 if TYPE_CHECKING:
@@ -68,6 +68,8 @@ class InvokeContext:
     hook_config_result: HookConfigResult | None = field(default=None)
     session_id: str | None = field(default=None)
     mcp_pool: MCPConnectionPool | None = field(default=None)
+    working_dir: Path | None = field(default=None)
+    bypass_tool_permissions: bool = field(default=False)
 
 
 class ToolError(Exception):
@@ -153,19 +155,27 @@ class BaseTool[
     selection_priority: ClassVar[int] = 0
 
     def __init__(
-        self, config_getter: Callable[[], ToolConfig], state: ToolState
+        self,
+        config_getter: Callable[[], ToolConfig],
+        state: ToolState,
+        workdir_getter: Callable[[], Path] | None = None,
     ) -> None:
         self._config_getter = config_getter
         self.state = state
+        self._workdir_getter = workdir_getter
 
     @property
     def config(self) -> ToolConfig:
         return self._config_getter()
 
+    @property
+    def workdir(self) -> Path:
+        return self._workdir_getter() if self._workdir_getter else Path.cwd()
+
     @abstractmethod
     async def run(
         self, args: ToolArgs, ctx: InvokeContext | None = None
-    ) -> AsyncGenerator[ToolStreamEvent | ToolResult, None]:
+    ) -> AsyncGenerator[BaseEvent | ToolResult, None]:
         """Invoke the tool with the given arguments."""
         raise NotImplementedError  # pragma: no cover
         yield  # type: ignore[misc]
@@ -203,7 +213,7 @@ class BaseTool[
 
     async def invoke(
         self, ctx: InvokeContext | None = None, **raw: Any
-    ) -> AsyncGenerator[ToolStreamEvent | ToolResult, None]:
+    ) -> AsyncGenerator[BaseEvent | ToolResult, None]:
         """Validate arguments and run the tool."""
         try:
             args_model, _ = self._get_tool_args_results()
@@ -218,11 +228,17 @@ class BaseTool[
 
     @classmethod
     def from_config(
-        cls, config_getter: Callable[[], ToolConfig]
+        cls,
+        config_getter: Callable[[], ToolConfig],
+        workdir_getter: Callable[[], Path] | None = None,
     ) -> BaseTool[ToolArgs, ToolResult, ToolConfig, ToolState]:
         state_class = cls._get_tool_state_class()
         initial_state = state_class()
-        return cls(config_getter=config_getter, state=initial_state)
+        return cls(
+            config_getter=config_getter,
+            state=initial_state,
+            workdir_getter=workdir_getter,
+        )
 
     @classmethod
     def _get_tool_config_class(cls) -> type[ToolConfig]:
@@ -284,6 +300,7 @@ class BaseTool[
                 cls.__name__: cls,
                 "InvokeContext": InvokeContext,
                 "AsyncGenerator": AsyncGenerator,
+                "BaseEvent": BaseEvent,
                 "ToolStreamEvent": ToolStreamEvent,
             },
         )
@@ -314,7 +331,7 @@ class BaseTool[
 
     @classmethod
     def _extract_result_type(cls, return_annotation: Any) -> type:
-        """Extract the ToolResult type from AsyncGenerator[ToolStreamEvent | ToolResult, None]."""
+        """Extract the ToolResult type from AsyncGenerator[BaseEvent | ToolResult, None]."""
         origin = get_origin(return_annotation)
         if origin is not AsyncGenerator:
             if isinstance(return_annotation, type):
@@ -331,7 +348,7 @@ class BaseTool[
         # Handle Union types (X | Y or Union[X, Y])
         if yield_origin is Union or isinstance(yield_type, types.UnionType):
             for arg in get_args(yield_type):
-                if arg is not ToolStreamEvent and isinstance(arg, type):
+                if isinstance(arg, type) and not issubclass(arg, BaseEvent):
                     return arg
 
         # Handle single type
@@ -400,11 +417,10 @@ class BaseTool[
         """
         return None
 
-    @staticmethod
-    def get_file_snapshot_for_path(path: str) -> FileSnapshot:
+    def get_file_snapshot_for_path(self, path: str) -> FileSnapshot:
         file_path = Path(path).expanduser()
         if not file_path.is_absolute():
-            file_path = Path.cwd() / file_path
+            file_path = self.workdir / file_path
         file_path = file_path.resolve()
         try:
             content: bytes | None = file_path.read_bytes()

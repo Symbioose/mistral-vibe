@@ -458,8 +458,18 @@ class LLMChunk(BaseModel):
         )
 
 
+class AgentIdentity(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    agent_id: str
+    parent_id: str | None = None
+    name: str
+
+
 class BaseEvent(BaseModel, ABC):
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    agent: AgentIdentity | None = None
 
 
 class UserMessageEvent(BaseEvent):
@@ -478,6 +488,7 @@ class AssistantEvent(BaseEvent):
             stopped_by_middleware=self.stopped_by_middleware
             or other.stopped_by_middleware,
             message_id=self.message_id or other.message_id,
+            agent=self.agent or other.agent,
         )
 
 
@@ -511,6 +522,29 @@ class ToolStreamEvent(BaseEvent):
     message: str
     tool_call_id: str
     data: dict[str, Any] | None = None
+
+
+type SubagentIsolation = Literal["none", "worktree"]
+
+type SubagentMergeStatus = Literal["not_attempted", "merged", "conflicts", "no_changes"]
+
+
+class SubagentStartedEvent(BaseEvent):
+    tool_call_id: str
+    task: str
+    isolation: SubagentIsolation = "none"
+    branch: str | None = None
+    worktree_path: Path | None = None
+
+
+class SubagentFinishedEvent(BaseEvent):
+    tool_call_id: str
+    status: Literal["completed", "failed", "cancelled"]
+    turns_used: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    branch: str | None = None
+    merge_status: SubagentMergeStatus = "not_attempted"
 
 
 class WaitingForInputEvent(BaseEvent):

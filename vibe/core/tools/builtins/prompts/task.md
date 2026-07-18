@@ -6,4 +6,6 @@ Usage:
 - Prefer direct tools for simple lookups: to read a specific file use `read_file`, and to find a specific symbol use `grep`, rather than spawning a subagent.
 - Launch multiple subagents in parallel for independent work; once delegated, do not duplicate that work yourself.
 - The subagent's result is not shown to the user — summarize it back to them yourself.
-- Subagents run read-only: they cannot modify files or ask the user questions.
+- Subagents cannot ask the user questions.
+- Explore-style subagents run read-only: they cannot modify files.
+- Worker-style subagents (e.g. `worker`) can modify files, but only inside their own isolated git worktree on a dedicated branch; the parent checkout is never touched until their branch is merged.

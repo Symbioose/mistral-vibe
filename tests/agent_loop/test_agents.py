@@ -14,6 +14,7 @@ from vibe.core.agents.manager import AgentManager
 from vibe.core.agents.models import (
     BUILTIN_AGENTS,
     CHAT,
+    AgentIsolation,
     AgentProfile,
     AgentSafety,
     AgentType,
@@ -150,6 +151,18 @@ class TestAgentProfile:
 
     def test_explore_is_subagent(self) -> None:
         assert BUILTIN_AGENTS[BuiltinAgentName.EXPLORE].agent_type == AgentType.SUBAGENT
+
+    def test_worker_is_write_capable_worktree_isolated_subagent(self) -> None:
+        worker = BUILTIN_AGENTS[BuiltinAgentName.WORKER]
+        assert worker.agent_type == AgentType.SUBAGENT
+        assert worker.isolation == AgentIsolation.WORKTREE
+        assert worker.safety == AgentSafety.DESTRUCTIVE
+        assert {"edit", "write_file", "bash"} <= set(worker.overrides["enabled_tools"])
+        assert worker.overrides["system_prompt_id"] == "worker"
+
+    def test_builtin_profiles_default_to_no_isolation(self) -> None:
+        assert BUILTIN_AGENTS[BuiltinAgentName.EXPLORE].isolation == AgentIsolation.NONE
+        assert BUILTIN_AGENTS[BuiltinAgentName.DEFAULT].isolation == AgentIsolation.NONE
 
     def test_agents(self) -> None:
         agents = [
@@ -364,6 +377,37 @@ class TestAgentProfileMigration:
 
         assert agent.overrides == {"disabled_tools": ["bash", "exit_plan_mode"]}
         assert result.disabled_tools == ["ask_user_question", "bash", "exit_plan_mode"]
+
+    def test_from_toml_parses_worktree_isolation(self, tmp_path: Path) -> None:
+        agent_file = tmp_path / "rust-worker.toml"
+        agent_file.write_text(
+            "\n".join([
+                'description = "Implements Rust changes"',
+                'agent_type = "subagent"',
+                'isolation = "worktree"',
+                'enabled_tools = ["grep", "read_file", "edit"]',
+            ]),
+            encoding="utf-8",
+        )
+
+        agent = AgentProfile.from_toml(agent_file)
+
+        assert agent.agent_type == AgentType.SUBAGENT
+        assert agent.isolation == AgentIsolation.WORKTREE
+        assert "isolation" not in agent.overrides
+
+    def test_from_toml_defaults_to_no_isolation(self, tmp_path: Path) -> None:
+        agent_file = tmp_path / "plain.toml"
+        agent_file.write_text('description = "Plain"', encoding="utf-8")
+
+        assert AgentProfile.from_toml(agent_file).isolation == AgentIsolation.NONE
+
+    def test_from_toml_rejects_unknown_isolation(self, tmp_path: Path) -> None:
+        agent_file = tmp_path / "bad.toml"
+        agent_file.write_text('isolation = "container"', encoding="utf-8")
+
+        with pytest.raises(ValueError, match="container"):
+            AgentProfile.from_toml(agent_file)
 
     def test_agent_manager_migrates_legacy_profile_files(self, tmp_path: Path) -> None:
         agents_dir = tmp_path / "agents"

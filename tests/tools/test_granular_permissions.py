@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -802,7 +803,7 @@ class TestCollectOutsideDirs:
         monkeypatch.setattr(bash_module, "is_windows", lambda: False)
         seen_paths: list[str] = []
 
-        def is_within_workdir(path: str) -> bool:
+        def is_within_workdir(path: str, workdir: Path | None = None) -> bool:
             seen_paths.append(path)
             return False
 
@@ -816,7 +817,7 @@ class TestCollectOutsideDirs:
     def test_git_bash_drive_path_normalized_before_workdir_check(self, monkeypatch):
         seen_paths: list[str] = []
 
-        def is_within_workdir(path: str) -> bool:
+        def is_within_workdir(path: str, workdir: Path | None = None) -> bool:
             seen_paths.append(path)
             return False
 
@@ -835,6 +836,8 @@ class TestCollectOutsideDirs:
         # Backslash paths are a Windows concern; a POSIX shell would consume the
         # backslashes as escapes, so detection only applies under is_windows().
         monkeypatch.setattr(bash_module, "is_windows", lambda: True)
-        monkeypatch.setattr(bash_module, "is_path_within_workdir", lambda _: False)
+        monkeypatch.setattr(
+            bash_module, "is_path_within_workdir", lambda _path, _workdir=None: False
+        )
         dirs = _collect_outside_dirs([f"cat {path}"])
         assert len(dirs) >= 1

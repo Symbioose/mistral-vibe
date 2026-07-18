@@ -79,9 +79,11 @@ class ToolManager:
         *,
         defer_mcp: bool = False,
         permission_getter: Callable[[str], ToolPermission | None] | None = None,
+        workdir_getter: Callable[[], Path] | None = None,
     ) -> None:
         self._config_getter = config_getter
         self._permission_getter = permission_getter
+        self._workdir_getter = workdir_getter
         self._mcp_registry = mcp_registry
         self._connector_registry = connector_registry
         self._instances: dict[str, BaseTool] = {}
@@ -601,7 +603,9 @@ class ToolManager:
         cached = self._instances.get(tool_name)
         if cached is not None and type(cached) is tool_class:
             return cached
-        instance = tool_class.from_config(lambda: self.get_tool_config(tool_name))
+        instance = tool_class.from_config(
+            lambda: self.get_tool_config(tool_name), workdir_getter=self._workdir_getter
+        )
         self._instances[tool_name] = instance
         return instance
 

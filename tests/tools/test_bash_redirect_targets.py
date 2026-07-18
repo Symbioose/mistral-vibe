@@ -1,0 +1,127 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from vibe.core.tools.base import BaseToolState, ToolPermission
+from vibe.core.tools.builtins.bash import (
+    Bash,
+    BashArgs,
+    BashToolConfig,
+    _collect_outside_dirs,
+    _extract_redirect_targets,
+)
+from vibe.core.tools.builtins.experimental_bash import (
+    _extract_redirect_targets as _extract_redirect_targets_experimental,
+)
+from vibe.core.tools.permissions import PermissionScope
+from vibe.core.utils import is_windows
+
+pytestmark = pytest.mark.skipif(
+    is_windows(), reason="redirect analysis applies to POSIX shell semantics"
+)
+
+
+class TestExtractRedirectTargets:
+    def test_simple_overwrite_redirect(self) -> None:
+        assert _extract_redirect_targets("cat > /tmp/out.txt") == ["/tmp/out.txt"]
+
+    def test_append_redirect(self) -> None:
+        assert _extract_redirect_targets("echo hi >> notes.txt") == ["notes.txt"]
+
+    def test_heredoc_with_file_redirect(self) -> None:
+        command = "cat > /parent/file.py << 'EOF'\nprint('hi')\nEOF"
+        assert _extract_redirect_targets(command) == ["/parent/file.py"]
+
+    def test_stderr_dup_and_dev_null_have_targets_but_are_skipped_later(self) -> None:
+        targets = _extract_redirect_targets("cmd > /dev/null 2>&1")
+        assert "/dev/null" in targets
+
+    def test_no_redirect_yields_nothing(self) -> None:
+        assert _extract_redirect_targets("ls -la /tmp") == []
+
+    def test_experimental_bash_extraction_matches(self) -> None:
+        command = "cat > /parent/file.py << 'EOF'\nx\nEOF"
+        assert _extract_redirect_targets_experimental(command) == ["/parent/file.py"]
+
+
+class TestCollectOutsideDirsRedirects:
+    def test_redirect_outside_workdir_is_collected(self, tmp_path: Path) -> None:
+        workdir = tmp_path / "wt"
+        workdir.mkdir()
+
+        dirs = _collect_outside_dirs(
+            ["cat <redirect>"], workdir, ["/private/tmp/parent/file.py"]
+        )
+
+        assert dirs
+        assert any("parent" in d for d in dirs)
+
+    def test_redirect_inside_workdir_is_allowed(self, tmp_path: Path) -> None:
+        workdir = tmp_path / "wt"
+        workdir.mkdir()
+
+        assert _collect_outside_dirs(["cat <redirect>"], workdir, ["out.txt"]) == set()
+
+    def test_dev_null_and_fd_dup_are_ignored(self, tmp_path: Path) -> None:
+        dirs = _collect_outside_dirs(
+            ["cmd <redirect>"], tmp_path, ["/dev/null", "&1", "1"]
+        )
+
+        assert dirs == set()
+
+    def test_variable_target_requires_approval(self, tmp_path: Path) -> None:
+        dirs = _collect_outside_dirs(["cat <redirect>"], tmp_path, ["$HOME/evil.txt"])
+
+        assert dirs == {"$HOME/evil.txt"}
+
+
+class TestBashResolvePermissionWithRedirects:
+    def make_bash(self, workdir: Path) -> Bash:
+        return Bash(
+            config_getter=lambda: BashToolConfig(),
+            state=BaseToolState(),
+            workdir_getter=lambda: workdir,
+        )
+
+    def test_allowlisted_command_redirecting_outside_workdir_asks(
+        self, tmp_path: Path
+    ) -> None:
+        workdir = tmp_path / "wt"
+        workdir.mkdir()
+        outside = tmp_path / "parent" / "file.py"
+        bash = self.make_bash(workdir)
+
+        ctx = bash.resolve_permission(
+            BashArgs(command=f"cat > {outside} << 'EOF'\nx\nEOF")
+        )
+
+        assert ctx is not None
+        assert ctx.permission is ToolPermission.ASK
+        assert any(
+            rp.scope is PermissionScope.OUTSIDE_DIRECTORY
+            for rp in ctx.required_permissions
+        )
+
+    def test_allowlisted_command_redirecting_inside_workdir_runs(
+        self, tmp_path: Path
+    ) -> None:
+        workdir = tmp_path / "wt"
+        workdir.mkdir()
+        bash = self.make_bash(workdir)
+
+        ctx = bash.resolve_permission(
+            BashArgs(command="cat > out.txt << 'EOF'\nx\nEOF")
+        )
+
+        assert ctx is not None
+        assert ctx.permission is ToolPermission.ALWAYS
+
+    def test_redirect_to_dev_null_stays_allowlisted(self, tmp_path: Path) -> None:
+        bash = self.make_bash(tmp_path)
+
+        ctx = bash.resolve_permission(BashArgs(command="ls . > /dev/null 2>&1"))
+
+        assert ctx is not None
+        assert ctx.permission is ToolPermission.ALWAYS

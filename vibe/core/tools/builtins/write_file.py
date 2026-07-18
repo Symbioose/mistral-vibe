@@ -86,6 +86,7 @@ class WriteFile(
             denylist=self.config.denylist,
             config_permission=self.config.permission,
             sensitive_patterns=self.config.sensitive_patterns,
+            workdir=self.workdir,
         )
 
     @final
@@ -112,7 +113,7 @@ class WriteFile(
 
         file_path = Path(args.file_path).expanduser()
         if not file_path.is_absolute():
-            file_path = Path.cwd() / file_path
+            file_path = self.workdir / file_path
         file_path = file_path.resolve()
 
         if file_path.exists():

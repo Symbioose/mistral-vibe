@@ -4,6 +4,7 @@ from collections.abc import AsyncGenerator
 import json
 
 from vibe.core.types import (
+    BaseEvent,
     LLMChunk,
     LLMMessage,
     LLMUsage,
@@ -53,7 +54,7 @@ def get_mocking_env(mock_chunks: list[LLMChunk] | None = None) -> dict[str, str]
 async def collect_result[T](gen: AsyncGenerator[ToolStreamEvent | T, None]) -> T:
     result = None
     async for item in gen:
-        if not isinstance(item, ToolStreamEvent):
+        if not isinstance(item, BaseEvent):
             result = item
     if result is None:
         raise RuntimeError("Generator did not yield a result")

@@ -103,6 +103,7 @@ class ReadFile(
             denylist=self.config.denylist,
             config_permission=self.config.permission,
             sensitive_patterns=self.config.sensitive_patterns,
+            workdir=self.workdir,
         )
 
     def _find_undiscovered_agents_md(self, file_path: Path) -> list[tuple[Path, str]]:
@@ -177,7 +178,7 @@ class ReadFile(
         if ctx is not None:
             new_docs = self._find_undiscovered_agents_md(file_path)
             if new_docs:
-                cwd = Path.cwd()
+                cwd = self.workdir
                 parts = [f"{_display_relative(d, cwd)}/AGENTS.md" for d, _ in new_docs]
                 yield ToolStreamEvent(
                     tool_name=self.get_name(),
@@ -202,7 +203,7 @@ class ReadFile(
 
         path = Path(raw_path).expanduser()
         if not path.is_absolute():
-            path = Path.cwd() / path
+            path = self.workdir / path
         path = path.resolve()
 
         if not path.exists():

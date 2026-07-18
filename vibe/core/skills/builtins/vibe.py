@@ -602,8 +602,25 @@ There are two kinds of agents:
 
 - **explore**: Read-only codebase exploration subagent (grep + read only).
   Spawned by the model, not selectable by the user.
+- **worker**: Write-capable subagent (grep, read, edit, write, bash, todo) that
+  implements code inside an isolated git worktree on a dedicated branch
+  (`vibe-worker-<id>` under `~/.vibe/worktrees/`). File edits inside the
+  worktree are auto-approved; outside they are denied. Requires a git repo.
+  Not in the task tool's default allowlist, so spawning one asks for approval
+  unless `"worker"` is added to `[tools.task] allowlist`. Several workers can
+  run in parallel (capped by `[tools.task] max_parallel`, default 4), each on
+  its own branch. Merge-back is controlled by `[tools.task] merge`:
+  `"manual"` (default) leaves the branch for the user; `"auto"` merges
+  conflict-free branches into the invoking checkout and reports conflicts
+  without ever resolving them. `[tools.task] keep_worktrees`
+  (`"always" | "on-failure" | "never"`, default `"on-failure"`) controls
+  whether the worktree directory survives; the branch always survives until
+  merged. Rewind never undoes an auto-merge.
 
-Custom agents are TOML files in `~/.vibe/agents/NAME.toml`.
+Custom agents are TOML files in `~/.vibe/agents/NAME.toml`. A custom subagent
+becomes a worker by setting `agent_type = "subagent"` and
+`isolation = "worktree"`; write-capable subagents without worktree isolation
+are rejected by the task tool.
 
 ## Built-in Slash Commands
 

@@ -38,6 +38,11 @@ class AgentType(StrEnum):
     SUBAGENT = auto()
 
 
+class AgentIsolation(StrEnum):
+    NONE = auto()
+    WORKTREE = auto()
+
+
 class BuiltinAgentName(StrEnum):
     DEFAULT = "default"
     CHAT = "chat"
@@ -45,6 +50,7 @@ class BuiltinAgentName(StrEnum):
     ACCEPT_EDITS = "accept-edits"
     AUTO_APPROVE = "auto-approve"
     EXPLORE = "explore"
+    WORKER = "worker"
     LEAN = "lean"
 
 
@@ -55,6 +61,7 @@ class AgentProfile:
     description: str
     safety: AgentSafety
     agent_type: AgentType = AgentType.AGENT
+    isolation: AgentIsolation = AgentIsolation.NONE
     overrides: dict[str, Any] = field(default_factory=dict)
     install_required: bool = False
 
@@ -80,6 +87,7 @@ class AgentProfile:
             description=data.pop("description", ""),
             safety=AgentSafety(data.pop("safety", AgentSafety.NEUTRAL)),
             agent_type=AgentType(data.pop("agent_type", AgentType.AGENT)),
+            isolation=AgentIsolation(data.pop("isolation", AgentIsolation.NONE)),
             overrides=data,
         )
 
@@ -148,6 +156,21 @@ EXPLORE = AgentProfile(
     overrides={"enabled_tools": ["grep", "read_file"], "system_prompt_id": "explore"},
 )
 
+WORKER = AgentProfile(
+    name=BuiltinAgentName.WORKER,
+    display_name="Worker",
+    description=(
+        "Write-capable subagent that implements code in an isolated git worktree"
+    ),
+    safety=AgentSafety.DESTRUCTIVE,
+    agent_type=AgentType.SUBAGENT,
+    isolation=AgentIsolation.WORKTREE,
+    overrides={
+        "enabled_tools": ["grep", "read_file", "edit", "write_file", "bash", "todo"],
+        "system_prompt_id": "worker",
+    },
+)
+
 LEAN = AgentProfile(
     name=BuiltinAgentName.LEAN,
     display_name="Lean",
@@ -194,5 +217,6 @@ BUILTIN_AGENTS: dict[str, AgentProfile] = {
     BuiltinAgentName.ACCEPT_EDITS: ACCEPT_EDITS,
     BuiltinAgentName.AUTO_APPROVE: AUTO_APPROVE,
     BuiltinAgentName.EXPLORE: EXPLORE,
+    BuiltinAgentName.WORKER: WORKER,
     BuiltinAgentName.LEAN: LEAN,
 }
