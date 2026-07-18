@@ -44,7 +44,7 @@ from vibe.core.experiments.session import (
     initialize_experiments as session_initialize_experiments,
 )
 from vibe.core.hooks.manager import HooksManager
-from vibe.core.hooks.models import HookConfigResult, HookEvent
+from vibe.core.hooks.models import HookConfigResult
 from vibe.core.llm.backend.factory import create_backend
 from vibe.core.llm.exceptions import BackendError
 from vibe.core.llm.format import (
@@ -159,7 +159,6 @@ from vibe.core.types import (
     ToolCall,
     ToolCallEvent,
     ToolResultEvent,
-    ToolStreamEvent,
     UserDisplayContentMetadata,
     UserInputCallback,
     UserMessageEvent,
@@ -1613,7 +1612,7 @@ class AgentLoop(AgentLoopHooksMixin):  # noqa: PLR0904
 
     async def _handle_tool_calls(
         self, resolved: ResolvedMessage
-    ) -> AsyncGenerator[ToolCallEvent | ToolResultEvent | ToolStreamEvent | HookEvent]:
+    ) -> AsyncGenerator[BaseEvent]:
         async for event in self._emit_failed_tool_events(resolved.failed_calls):
             yield event
         if not resolved.tool_calls:
@@ -1650,11 +1649,9 @@ class AgentLoop(AgentLoopHooksMixin):  # noqa: PLR0904
 
     async def _run_tools_concurrently(
         self, tool_calls: list[ResolvedToolCall]
-    ) -> AsyncGenerator[ToolCallEvent | ToolResultEvent | ToolStreamEvent | HookEvent]:
+    ) -> AsyncGenerator[BaseEvent]:
         """Execute multiple tool calls concurrently, yielding events as they arrive."""
-        queue: asyncio.Queue[
-            ToolCallEvent | ToolResultEvent | ToolStreamEvent | HookEvent | None
-        ] = asyncio.Queue()
+        queue: asyncio.Queue[BaseEvent | None] = asyncio.Queue()
 
         tasks = [
             asyncio.create_task(self._execute_tool_to_queue(tc, queue))
@@ -1693,11 +1690,7 @@ class AgentLoop(AgentLoopHooksMixin):  # noqa: PLR0904
                     await monitor
 
     async def _execute_tool_to_queue(
-        self,
-        tc: ResolvedToolCall,
-        queue: asyncio.Queue[
-            ToolCallEvent | ToolResultEvent | ToolStreamEvent | HookEvent | None
-        ],
+        self, tc: ResolvedToolCall, queue: asyncio.Queue[BaseEvent | None]
     ) -> None:
         """Run a single tool call, sending events to the queue."""
         async for event in self._process_one_tool_call(tc):
@@ -1705,7 +1698,7 @@ class AgentLoop(AgentLoopHooksMixin):  # noqa: PLR0904
 
     async def _process_one_tool_call(
         self, tool_call: ResolvedToolCall
-    ) -> AsyncGenerator[ToolResultEvent | ToolStreamEvent | HookEvent]:
+    ) -> AsyncGenerator[BaseEvent]:
         async with tool_span(
             tool_name=tool_call.tool_name,
             call_id=tool_call.call_id,
@@ -1716,7 +1709,7 @@ class AgentLoop(AgentLoopHooksMixin):  # noqa: PLR0904
 
     async def _execute_tool_call(
         self, span: trace.Span, tool_call: ResolvedToolCall
-    ) -> AsyncGenerator[ToolResultEvent | ToolStreamEvent | HookEvent]:
+    ) -> AsyncGenerator[BaseEvent]:
         try:
             tool_instance = self.tool_manager.get(tool_call.tool_name)
         except Exception as exc:
@@ -1826,7 +1819,7 @@ class AgentLoop(AgentLoopHooksMixin):  # noqa: PLR0904
         decision: ToolDecision,
         *,
         span: trace.Span,
-    ) -> AsyncGenerator[ToolResultEvent | ToolStreamEvent | HookEvent]:
+    ) -> AsyncGenerator[BaseEvent]:
         self.stats.tool_calls_agreed += 1
 
         snapshot = await asyncio.to_thread(
@@ -1859,7 +1852,7 @@ class AgentLoop(AgentLoopHooksMixin):  # noqa: PLR0904
             ),
             **tool_call.args_dict,
         ):
-            if isinstance(item, ToolStreamEvent):
+            if isinstance(item, BaseEvent):
                 yield item
             else:
                 result_model = item

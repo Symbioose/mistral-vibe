@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from vibe.core.checkpoints import FileSnapshot, FileState
 from vibe.core.logger import logger
-from vibe.core.types import ToolStreamEvent
+from vibe.core.types import BaseEvent, ToolStreamEvent
 from vibe.core.utils.io import read_safe
 
 if TYPE_CHECKING:
@@ -165,7 +165,7 @@ class BaseTool[
     @abstractmethod
     async def run(
         self, args: ToolArgs, ctx: InvokeContext | None = None
-    ) -> AsyncGenerator[ToolStreamEvent | ToolResult, None]:
+    ) -> AsyncGenerator[BaseEvent | ToolResult, None]:
         """Invoke the tool with the given arguments."""
         raise NotImplementedError  # pragma: no cover
         yield  # type: ignore[misc]
@@ -203,7 +203,7 @@ class BaseTool[
 
     async def invoke(
         self, ctx: InvokeContext | None = None, **raw: Any
-    ) -> AsyncGenerator[ToolStreamEvent | ToolResult, None]:
+    ) -> AsyncGenerator[BaseEvent | ToolResult, None]:
         """Validate arguments and run the tool."""
         try:
             args_model, _ = self._get_tool_args_results()
@@ -284,6 +284,7 @@ class BaseTool[
                 cls.__name__: cls,
                 "InvokeContext": InvokeContext,
                 "AsyncGenerator": AsyncGenerator,
+                "BaseEvent": BaseEvent,
                 "ToolStreamEvent": ToolStreamEvent,
             },
         )
@@ -314,7 +315,7 @@ class BaseTool[
 
     @classmethod
     def _extract_result_type(cls, return_annotation: Any) -> type:
-        """Extract the ToolResult type from AsyncGenerator[ToolStreamEvent | ToolResult, None]."""
+        """Extract the ToolResult type from AsyncGenerator[BaseEvent | ToolResult, None]."""
         origin = get_origin(return_annotation)
         if origin is not AsyncGenerator:
             if isinstance(return_annotation, type):
@@ -331,7 +332,7 @@ class BaseTool[
         # Handle Union types (X | Y or Union[X, Y])
         if yield_origin is Union or isinstance(yield_type, types.UnionType):
             for arg in get_args(yield_type):
-                if arg is not ToolStreamEvent and isinstance(arg, type):
+                if isinstance(arg, type) and not issubclass(arg, BaseEvent):
                     return arg
 
         # Handle single type
