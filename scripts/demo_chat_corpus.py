@@ -183,7 +183,7 @@ AGENTS_MD = """\
 
 FILES = {
     "AGENTS.md": AGENTS_MD,
-    ".vibe/config.toml": "[tools.task]\nmax_parallel = 12\n",
+    ".vibe/config.toml": "[tools.task]\nmax_parallel = 3\n",
     ".gitignore": "__pycache__/\n*.pyc\n",
     "tests/__init__.py": "",
     "geometry.py": GEOMETRY,
