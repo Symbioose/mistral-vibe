@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from textual.app import App, ComposeResult
+from textual.message import Message
 
 from vibe.cli.textual_ui.widgets.meow_meow_meow import (
     MeowMeowMeowAgentRow,
@@ -150,7 +151,7 @@ async def test_row_click_requests_inspection() -> None:
         requests: list[MeowMeowMeowCallMessage.InspectRequested] = []
         original_post = widget.post_message
 
-        def capture(message: object) -> bool:
+        def capture(message: Message) -> bool:
             if isinstance(message, MeowMeowMeowCallMessage.InspectRequested):
                 requests.append(message)
                 return True
