@@ -32,7 +32,9 @@ from vibe.core.config import SessionLoggingConfig, VibeConfig
 from vibe.core.config.orchestrator_legacy import LegacyConfigOrchestrator
 from vibe.core.types import AssistantEvent
 
-MODULES = ["geometry", "text_tools", "sequences"]
+
+def project_modules(project: Path) -> list[str]:
+    return sorted(p.stem for p in project.glob("*.py"))
 
 WORKER_BRIEF = (
     "Implement EVERY function currently raising NotImplementedError in the "
@@ -49,11 +51,12 @@ SOLO_BRIEF = (
 )
 
 
-def generate_project(out: Path) -> None:
+def generate_project(out: Path, dup: bool) -> None:
     script = Path(__file__).parent / "demo_chat_corpus.py"
-    subprocess.run(
-        [sys.executable, str(script), "--out", str(out)], check=True
-    )
+    cmd = [sys.executable, str(script), "--out", str(out)]
+    if dup:
+        cmd.append("--dup")
+    subprocess.run(cmd, check=True)
 
 
 def run_tests(project: Path) -> tuple[int, int]:
@@ -123,7 +126,7 @@ async def run_agent(prompt: str, config: VibeConfig) -> tuple[int, int]:
 
 
 async def bench_solo(project: Path, config: VibeConfig) -> dict[str, Any]:
-    files = ", ".join(str(project / f"{m}.py") for m in MODULES)
+    files = ", ".join(str(project / f"{m}.py") for m in project_modules(project))
     prompt = SOLO_BRIEF.format(tests_dir=project / "tests", files=files)
     start = time.monotonic()
     p_tokens, c_tokens = await run_agent(prompt, config)
@@ -142,7 +145,7 @@ async def bench_solo(project: Path, config: VibeConfig) -> dict[str, Any]:
 
 async def bench_workers(project: Path, config: VibeConfig) -> dict[str, Any]:
     worktrees: list[tuple[str, Path]] = []
-    for module in MODULES:
+    for module in project_modules(project):
         wt_path = project.parent / f"wk_{module}"
         git(project, "worktree", "add", str(wt_path), "-b", f"wk_{module}")
         worktrees.append((module, wt_path))
@@ -182,21 +185,23 @@ async def bench_workers(project: Path, config: VibeConfig) -> dict[str, Any]:
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="bench_chat")
-    out_dir = Path(parser.parse_args().out)
+    parser.add_argument("--dup", action="store_true")
+    parsed = parser.parse_args()
+    out_dir = Path(parsed.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     config = load_config()
 
     results: list[dict[str, Any]] = []
 
     solo_project = out_dir / "solo" / "project"
-    generate_project(solo_project)
+    generate_project(solo_project, parsed.dup)
     baseline_passed, baseline_total = run_tests(solo_project)
     print(f"etat initial: {baseline_passed}/{baseline_total} tests verts", flush=True)
     results.append(await bench_solo(solo_project, config))
     print(json.dumps(results[-1]), flush=True)
 
     workers_project = out_dir / "workers" / "project"
-    generate_project(workers_project)
+    generate_project(workers_project, parsed.dup)
     results.append(await bench_workers(workers_project, config))
     print(json.dumps(results[-1]), flush=True)
 

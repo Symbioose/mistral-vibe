@@ -199,12 +199,20 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True)
     parser.add_argument("--no-agents", action="store_true")
+    parser.add_argument("--dup", action="store_true")
     parsed = parser.parse_args()
     out = Path(parsed.out)
     if out.exists():
         shutil.rmtree(out, onexc=_force_remove)
     (out / "tests").mkdir(parents=True)
-    for rel, content in FILES.items():
+    files = dict(FILES)
+    if parsed.dup:
+        for module in ("geometry", "text_tools", "sequences"):
+            files[f"{module}_b.py"] = files[f"{module}.py"]
+            files[f"tests/test_{module}_b.py"] = files[
+                f"tests/test_{module}.py"
+            ].replace(f"from {module} import", f"from {module}_b import")
+    for rel, content in files.items():
         if parsed.no_agents and rel == "AGENTS.md":
             continue
         (out / rel).write_text(content, encoding="utf-8", newline="\n")
