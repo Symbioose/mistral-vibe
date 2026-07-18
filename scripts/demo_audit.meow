@@ -1,0 +1,76 @@
+meta = {
+    "name": "demo-audit",
+    "description": "Audit parallele: scan par lots, verification, synthese",
+    "phases": [
+        {"title": "Scan", "detail": "un agent par lot de 3 fichiers"},
+        {"title": "Verify", "detail": "re-verification independante des findings"},
+        {"title": "Synthese", "detail": "fusion + rapport JSON"},
+    ],
+}
+
+FINDINGS = {
+    "type": "object",
+    "properties": {
+        "bugs": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "file": {"type": "string"},
+                    "function": {"type": "string"},
+                    "description": {"type": "string"},
+                },
+                "required": ["file", "function"],
+            },
+        }
+    },
+    "required": ["bugs"],
+}
+VERDICT = {
+    "type": "object",
+    "properties": {
+        "confirmed": {"type": "boolean"},
+        "reason": {"type": "string"},
+    },
+    "required": ["confirmed"],
+}
+
+paths = [str(p) for p in (args or [])]
+batches = ["\n".join(paths[i : i + 3]) for i in range(0, len(paths), 3)]
+
+phase("Scan")
+scans = await parallel([
+    (
+        lambda b=b, i=i: agent(
+            prompts["scan"] + b,
+            label=f"scan:{i}",
+            phase="Scan",
+            schema=FINDINGS,
+            model=fast_model,
+        )
+    )
+    for i, b in enumerate(batches)
+])
+candidates = []
+for out in scans:
+    if out:
+        candidates.extend(out.get("bugs", []))
+log(f"{len(candidates)} findings candidats sur {len(batches)} lots")
+
+phase("Verify")
+verdicts = await parallel([
+    (
+        lambda bug=bug: agent(
+            prompts["verify"] + json.dumps(bug),
+            label="verify:" + str(bug.get("file", "?")),
+            phase="Verify",
+            schema=VERDICT,
+        )
+    )
+    for bug in candidates
+])
+
+phase("Synthese")
+confirmed = [b for b, v in zip(candidates, verdicts) if v and v.get("confirmed")]
+log(f"{len(confirmed)} bugs confirmes / {len(candidates)} candidats")
+return {"bugs": confirmed}

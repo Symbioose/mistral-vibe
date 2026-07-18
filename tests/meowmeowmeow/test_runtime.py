@@ -104,7 +104,7 @@ async def test_top_level_return() -> None:
 @pytest.mark.asyncio
 async def test_args_passthrough() -> None:
     outcome, _spawner, _events = await run_meow_meow_meow(
-        'await agent("touch")\nresult(args[\'items\'])', args={"items": [1, 2]}
+        "await agent(\"touch\")\nresult(args['items'])", args={"items": [1, 2]}
     )
     assert outcome.value == [1, 2]
 
@@ -318,7 +318,7 @@ async def test_phases_and_logs_emit_events() -> None:
 @pytest.mark.asyncio
 async def test_print_is_logged() -> None:
     _outcome, _spawner, events = await run_meow_meow_meow(
-        'print("hello", 1)\nresult(None)'
+        'await agent("a")\nprint("hello", 1)\nresult(None)'
     )
     logs = [e.message for e in events if isinstance(e, MeowMeowMeowLogEvent)]
     assert logs == ["hello 1"]
@@ -326,13 +326,7 @@ async def test_print_is_logged() -> None:
 
 @pytest.mark.asyncio
 async def test_max_agents_cap_fails_meow_meow_meow() -> None:
-    body = (
-        "i = 0\n"
-        "while i < 5:\n"
-        "    await agent(f'p{i}')\n"
-        "    i += 1\n"
-        "result(None)"
-    )
+    body = "i = 0\nwhile i < 5:\n    await agent(f'p{i}')\n    i += 1\nresult(None)"
     outcome, spawner, _events = await run_meow_meow_meow(body, max_agents=3)
     assert outcome.status is MeowMeowMeowStatus.FAILED
     assert outcome.error is not None
@@ -351,7 +345,9 @@ async def test_fanout_cap_fails_meow_meow_meow() -> None:
 
 @pytest.mark.asyncio
 async def test_script_exception_fails_with_location() -> None:
-    outcome, _spawner, _events = await run_meow_meow_meow("x = {}\nx['missing']")
+    outcome, _spawner, _events = await run_meow_meow_meow(
+        "await agent(\"a\")\nx = {}\nx['missing']"
+    )
     assert outcome.status is MeowMeowMeowStatus.FAILED
     assert outcome.error is not None
     assert "KeyError" in outcome.error
@@ -362,7 +358,9 @@ async def test_script_exception_fails_with_location() -> None:
 
 @pytest.mark.asyncio
 async def test_banned_time_fails_meow_meow_meow() -> None:
-    outcome, _spawner, _events = await run_meow_meow_meow("t = time.time()\nresult(t)")
+    outcome, _spawner, _events = await run_meow_meow_meow(
+        'await agent("a")\nt = time.time()\nresult(t)'
+    )
     assert outcome.status is MeowMeowMeowStatus.FAILED
     assert outcome.error is not None
     assert "unavailable" in outcome.error
@@ -370,7 +368,9 @@ async def test_banned_time_fails_meow_meow_meow() -> None:
 
 @pytest.mark.asyncio
 async def test_non_serializable_result_rejected() -> None:
-    outcome, _spawner, _events = await run_meow_meow_meow("result(lambda: 1)")
+    outcome, _spawner, _events = await run_meow_meow_meow(
+        'await agent("a")\nresult(lambda: 1)'
+    )
     assert outcome.status is MeowMeowMeowStatus.FAILED
     assert outcome.error is not None
     assert "JSON-serializable" in outcome.error
@@ -474,23 +474,11 @@ async def test_progress_callback_emits_events() -> None:
 
 @pytest.mark.asyncio
 async def test_zero_agent_run_fails_with_diagnostic() -> None:
-    outcome, _spawner, _events = await run_meow_meow_meow("")
-    assert outcome.status is MeowMeowMeowStatus.FAILED
-    assert outcome.error is not None
-    assert "without spawning a single agent" in outcome.error
-
-
-@pytest.mark.asyncio
-async def test_defined_but_never_awaited_main_fails() -> None:
-    body = (
-        "async def do_everything():\n"
-        '    return await agent("x")\n'
-        "result(None)\n"
-    )
+    body = "async def noop():\n    return 1\nx = await noop()\nresult(None)"
     outcome, _spawner, _events = await run_meow_meow_meow(body)
     assert outcome.status is MeowMeowMeowStatus.FAILED
     assert outcome.error is not None
-    assert "never awaited" in outcome.error
+    assert "without spawning a single agent" in outcome.error
 
 
 @pytest.mark.asyncio

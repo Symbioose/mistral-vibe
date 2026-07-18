@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import json
 from pathlib import Path
 from typing import Any, ClassVar, cast
 
@@ -11,6 +12,7 @@ from vibe.core.meowmeowmeow.models import (
     SubagentOutcome,
     SubagentRequest,
 )
+from vibe.core.meowmeowmeow.script import parse_meow_meow_meow_script
 from vibe.core.tools.base import InvokeContext, ToolError
 import vibe.core.tools.builtins.meow_meow_meow as meow_meow_meow_module
 from vibe.core.tools.builtins.meow_meow_meow import (
@@ -181,6 +183,40 @@ def test_script_arg_has_max_length_in_schema() -> None:
     script_schema = parameters["properties"]["script"]
     variants = script_schema.get("anyOf", [script_schema])
     assert any(v.get("maxLength") == 10_000 for v in variants)
+
+
+def test_canned_demo_script_stays_valid() -> None:
+    repo_root = Path(__file__).parents[2]
+    source = (repo_root / "scripts" / "demo_audit.meow").read_text(encoding="utf-8")
+    parsed = parse_meow_meow_meow_script(source)
+    assert parsed.meta.name == "demo-audit"
+    sidecar = json.loads(
+        (repo_root / "scripts" / "demo_audit.prompts.json").read_text(encoding="utf-8")
+    )
+    assert set(sidecar) == {"scan", "verify"}
+
+
+@pytest.mark.asyncio
+async def test_script_path_loads_prompts_sidecar(
+    tmp_path: Path, fake_spawner: type[FakeSpawner]
+) -> None:
+    script = (
+        'meta = {"name": "sidecar", "description": "d"}\n'
+        'out = await agent(prompts["greet"])\n'
+        "return out\n"
+    )
+    script_file = tmp_path / "wf.meow"
+    script_file.write_text(script, encoding="utf-8")
+    (tmp_path / "wf.prompts.json").write_text(
+        json.dumps({"greet": "say hello"}), encoding="utf-8"
+    )
+    tool = make_tool()
+    ctx = InvokeContext(tool_call_id="tc1", session_dir=tmp_path)
+    _stream, final = await collect(
+        tool, MeowMeowMeowArgs(script_path=str(script_file)), ctx
+    )
+    assert final.status is MeowMeowMeowStatus.COMPLETED
+    assert fake_spawner.calls[0].prompt == "say hello"
 
 
 def test_tool_name_and_description() -> None:

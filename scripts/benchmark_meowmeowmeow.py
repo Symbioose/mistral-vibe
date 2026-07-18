@@ -400,7 +400,13 @@ async def main() -> None:
         (out_dir / "ground_truth.json").write_text(
             json.dumps(truth, indent=2), encoding="utf-8"
         )
+        assets = Path(__file__).parent
+        for asset in ("demo_audit.meow", "demo_audit.prompts.json"):
+            (out_dir / asset).write_text(
+                (assets / asset).read_text(encoding="utf-8"), encoding="utf-8"
+            )
         print(f"corpus written to {corpus_dir} (ground_truth.json alongside)")
+        print(f"canned audit script: {out_dir / 'demo_audit.meow'}")
         return
     config = load_config()
 
