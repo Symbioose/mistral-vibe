@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MeowMeowMeow — diagrammes d'architecture</title>
+<!--
+  Page autonome : ouvrir par double-clic dans un navigateur (Mermaid chargé via CDN).
+  Note : si un jour ces pages sont publiées comme Artifacts claude.ai, Mermaid y est
+  rendu nativement via des blocs ```mermaid / <pre class="mermaid"> SANS CDN — le
+  <script> CDN ci-dessous deviendrait alors inutile.
+-->
+<style>
+  :root { --accent: #FF8205; --ink: #1f2328; --muted: #57606a; --border: #e4e7eb; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1.5rem 4rem;
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink); background: #fdfcfb; line-height: 1.55;
+  }
+  main { max-width: 1150px; margin: 0 auto; }
+  h1 { color: var(--accent); font-size: 1.9rem; margin: 0 0 .3rem; }
+  h2 { color: var(--accent); font-size: 1.3rem; margin: 3rem 0 .4rem; border-bottom: 2px solid var(--border); padding-bottom: .3rem; }
+  p.lead { color: var(--muted); margin-top: 0; }
+  nav ul { margin: .5rem 0 0; padding-left: 1.2rem; }
+  nav a { color: var(--ink); }
+  code { background: #f3f1ee; padding: .1em .35em; border-radius: 4px; font-size: .9em; }
+  pre.mermaid {
+    background: #fff; border: 1px solid var(--border); border-radius: 8px;
+    padding: 1rem; overflow-x: auto; text-align: center;
+  }
+</style>
+</head>
+<body>
+<main>
+<h1>MeowMeowMeow</h1>
+<p class="lead">Tool builtin <code>meow_meow_meow</code> : le LLM écrit un script Python async
+qui orchestre des sub-agents en parallèle (<code>agent()</code>, <code>parallel()</code>,
+<code>pipeline()</code>, <code>phase()</code>, <code>log()</code>), avec validation statique
+stricte, journal de replay et TUI live. Chaque nœud ci-dessous porte le nom réel du
+composant dans le code.</p>
+
+<nav>
+<strong>Sommaire</strong>
+<ul>
+  <li><a href="#archi">1. Architecture d'ensemble</a></li>
+  <li><a href="#sequence">2. Séquence d'un run nominal (+ resume)</a></li>
+  <li><a href="#etats">3. Cycle de vie d'un run</a></li>
+  <li><a href="#validation">4. Pipeline de validation du script</a></li>
+</ul>
+</nav>
+
+<h2 id="archi">1. Architecture d'ensemble</h2>
+<p>Le tool <code>MeowMeowMeow</code> valide le script, construit le
+<code>MeowMeowMeowRuntime</code> et relaie ses événements vers la TUI via
+<code>ToolStreamEvent.data</code>. Le runtime consulte le journal avant chaque spawn et
+délègue l'exécution réelle des agents à <code>_AgentLoopSpawner</code> (un
+<code>AgentLoop</code> par appel <code>agent()</code>).</p>
+<pre class="mermaid">
+flowchart TB
+    LLM["LLM assistant"]
+
+    subgraph TOOL_SG["vibe/core/tools/builtins/meow_meow_meow.py"]
+        TOOL["MeowMeowMeow — BaseTool"]
+        SPAWNER["_AgentLoopSpawner<br/>profils SUBAGENT uniquement<br/>refuse write tools et isolation"]
+        SIDECAR["sidecar script.prompts.json<br/>lu si args.prompts absent"]
+    end
+
+    subgraph CORE_SG["vibe/core/meowmeowmeow/"]
+        VAL["parse_meow_meow_meow_script<br/>script.py"]
+        RT["MeowMeowMeowRuntime<br/>runtime.py"]
+        PRIM["primitives exposées au script :<br/>agent, parallel, pipeline, phase, log,<br/>result, args, prompts, fast_model"]
+        SEM["Semaphore de concurrence<br/>max(1, min(16, cpu-2))"]
+        CAP["caps : 1000 agents par run,<br/>4096 items par fan-out"]
+        JR["MeowMeowMeowJournal<br/>run_dir/journal.jsonl"]
+        STRUCT["parse_structured<br/>structured.py — schéma JSON,<br/>2 relances correctives max"]
+    end
+
+    subgraph LOOPS_SG["sub-agents spawnés"]
+        AL1["AgentLoop 1"]
+        AL2["AgentLoop 2"]
+        ALN["AgentLoop N"]
+    end
+
+    subgraph UI_SG["vibe/cli/textual_ui"]
+        EH["EventHandler._handle_tool_stream<br/>handlers/event_handler.py"]
+        WID["MeowMeowMeowCallMessage<br/>widgets/meow_meow_meow.py"]
+        INS["MeowMeowMeowInspectorScreen<br/>ModalScreen — ctrl+w"]
+    end
+
+    LLM -->|"tool call meow_meow_meow :<br/>script ou script_path, args,<br/>prompts, resume_from_run_id"| TOOL
+    SIDECAR -.-> TOOL
+    TOOL -->|"1. validation"| VAL
+    VAL -->|"ParsedScript ou<br/>MeowMeowMeowScriptError"| TOOL
+    TOOL -->|"2. construit puis run()<br/>en tâche de fond"| RT
+    RT --- PRIM
+    RT --- SEM
+    RT --- CAP
+    RT -->|"consume(key) avant spawn<br/>record(key) si succès seulement"| JR
+    RT -->|"sortie structurée :<br/>validation + retry"| STRUCT
+    RT -->|"SubagentRequest<br/>agent_name, prompt, model"| SPAWNER
+    SPAWNER --> AL1
+    SPAWNER --> AL2
+    SPAWNER --> ALN
+    RT -->|"MeowMeowMeowEvent<br/>on_event vers la queue"| TOOL
+    TOOL -->|"ToolStreamEvent.data =<br/>event.model_dump(mode=json)"| EH
+    EH -->|"handle_meow_meow_meow_event(data)"| WID
+    WID -->|"clic ou ctrl+w :<br/>InspectRequested"| INS
+    TOOL -->|"MeowMeowMeowResult<br/>+ result.json sur disque"| LLM
+</pre>
+
+<h2 id="sequence">2. Séquence d'un run nominal (+ resume)</h2>
+<p>Run nominal : validation, événement <code>phases_planned</code> (émis par le tool depuis
+<code>meta.phases</code>, pas par le runtime), fan-out de trois agents concurrents dont un
+avec retry de schéma, enregistrement au journal des seuls succès. Le bloc final montre le
+chemin resume : les appels <code>agent()</code> déjà réussis sont rejoués depuis
+<code>journal.jsonl</code> sans aucun spawn.</p>
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant LLM
+    participant Tool as MeowMeowMeow (tool)
+    participant Val as parse_meow_meow_meow_script
+    participant J as MeowMeowMeowJournal
+    participant RT as MeowMeowMeowRuntime
+    participant SP as _AgentLoopSpawner
+    participant AL as AgentLoop (x3)
+    participant UI as EventHandler / widget
+
+    LLM->>Tool: invoke(script_path, args, prompts)
+    Tool->>Val: valider la source
+    Val-->>Tool: ParsedScript (meta, code)
+    Tool->>J: create(run_dir/journal.jsonl)
+    Tool-->>UI: ToolStreamEvent kind=phases_planned (depuis meta.phases)
+    Tool->>RT: run() en tâche de fond, on_event vers la queue
+    RT-->>UI: phase_started (premier appel phase(titre))
+
+    par agent A
+        RT->>J: consume(key) : miss
+        RT-->>UI: agent_started
+        RT->>SP: SubagentRequest (agent_name, prompt, model)
+        SP->>AL: AgentLoop.act(prompt)
+        AL-->>SP: messages assistant + tool events
+        SP-->>RT: on_progress(message)
+        RT-->>UI: agent_progress
+        AL-->>SP: SubagentOutcome (success, text)
+        SP-->>RT: outcome
+        RT->>J: record(key, result) : succès uniquement
+        RT-->>UI: agent_finished (status=ok)
+    and agent B avec retry de schéma
+        RT->>SP: SubagentRequest
+        SP-->>RT: texte non conforme au schéma
+        Note over RT: parse_structured échoue :<br/>prompt correctif puis nouvel essai<br/>(schema_retries = 2 relances max)
+        RT->>SP: SubagentRequest (prompt correctif)
+        SP-->>RT: JSON valide
+        RT->>J: record(key, result)
+        RT-->>UI: agent_finished (status=ok)
+    and agent C
+        RT->>SP: SubagentRequest
+        SP-->>RT: outcome
+        RT->>J: record(key, result)
+        RT-->>UI: agent_finished (status=ok)
+    end
+
+    RT-->>UI: meow_meow_meow_finished (status, agents_spawned, duration_s)
+    RT-->>Tool: MeowMeowMeowRunOutcome
+    Tool-->>LLM: MeowMeowMeowResult (+ result.json)
+
+    rect rgb(255, 244, 230)
+        Note over LLM,UI: chemin resume — re-invocation avec resume_from_run_id
+        LLM->>Tool: invoke(resume_from_run_id)
+        Tool->>J: create(resume_from = journal.jsonl du run précédent)
+        Tool->>RT: run()
+        RT->>J: consume(key) : hit (multiset FIFO par clé)
+        RT-->>UI: agent_started puis agent_finished (cached=true)
+        Note over RT,SP: zéro appel au spawner pour les succès rejoués
+    end
+</pre>
+
+<h2 id="etats">3. Cycle de vie d'un run</h2>
+<p>Un script rejeté ne crée jamais de run. Un run 0-agent est un échec explicite. La
+clé du replay : la re-invocation avec <code>resume_from_run_id</code> rejoue depuis
+<code>journal.jsonl</code> les appels <code>agent()</code> réussis (clé = hash SHA-256 de
+prompt + schema + agent_name + model) et ré-exécute uniquement le reste.</p>
+<pre class="mermaid">
+stateDiagram-v2
+    state "Validation — parse_meow_meow_meow_script" as validation
+    state "Rejeté — ToolError renvoyé au LLM" as rejete
+    state "Running — MeowMeowMeowRuntime.run" as running
+    state "completed" as completed
+    state "failed" as failed
+    state "cancelled" as cancelled
+
+    [*] --> validation
+    validation --> rejete : MeowMeowMeowScriptError, liste complète des violations
+    rejete --> [*] : aucun run_id créé
+    validation --> running : ParsedScript, run_id + script.py + journal créés
+    running --> completed : main retourne et agents_spawned ≥ 1
+    running --> failed : exception du script ou MeowMeowMeowError
+    running --> failed : run 0-agent, échec explicite
+    running --> cancelled : asyncio.CancelledError, pas de meow_meow_meow_finished émis
+    completed --> [*] : MeowMeowMeowResult + result.json
+    cancelled --> [*] : status CANCELLED renvoyé par le tool
+    failed --> running : resume_from_run_id — replay des succès depuis journal.jsonl
+    failed --> [*] : MeowMeowMeowResult failed + conseil de resume au LLM
+</pre>
+
+<h2 id="validation">4. Pipeline de validation du script</h2>
+<p>Ordre réel des vérifications dans <code>parse_meow_meow_meow_script</code>
+(script.py). Seule l'erreur de syntaxe est fail-fast ; toutes les autres violations sont
+accumulées puis rendues au LLM en une seule <code>MeowMeowMeowScriptError</code> listant
+la totalité des problèmes.</p>
+<pre class="mermaid">
+flowchart TB
+    SRC["source du script<br/>inline ou script_path"] --> P1["ast.parse"]
+    P1 -->|"SyntaxError"| FF["MeowMeowMeowScriptError immédiate<br/>_format_syntax_error<br/>seule étape fail-fast"]
+    P1 -->|"AST valide"| P2["_extract_meta<br/>meta = dict littéral pur en tête,<br/>validé par MeowMeowMeowMeta"]
+    P2 --> P3["cap de lignes<br/>MAX_SCRIPT_LINES = 200"]
+    P3 --> COLLECT
+
+    subgraph COLLECT["_collect_violations — dans l'ordre"]
+        direction TB
+        V1["imports interdits<br/>ast.Import / ast.ImportFrom"]
+        V2["accès dunder<br/>attribut commençant par __"]
+        V3["noms __builtins__ / __import__"]
+        V4["littéraux chaîne trop longs<br/>MAX_STRING_LITERAL_LEN = 250"]
+        V5["shadowing de RESERVED_PRIMITIVES :<br/>agent, parallel, pipeline, phase, log,<br/>result, args, prompts, fast_model"]
+        V6["_collect_missing_awaits<br/>agent / parallel / pipeline sans await"]
+        V7["_collect_sequential_awaits<br/>await agent directement dans un for"]
+        V8["_has_top_level_await<br/>au moins un await top-level requis"]
+        V1 --> V2 --> V3 --> V4 --> V5 --> V6 --> V7 --> V8
+    end
+
+    COLLECT --> DEC{"liste d'erreurs vide ?"}
+    DEC -->|"oui"| OK["ParsedScript<br/>meta + code compilé + source"]
+    DEC -->|"non"| ERR["MeowMeowMeowScriptError :<br/>liste COMPLÈTE des violations<br/>rendue en une seule passe"]
+</pre>
+
+</main>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral" });
+</script>
+</body>
+</html>

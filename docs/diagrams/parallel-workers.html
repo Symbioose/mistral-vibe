@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parallel workers (orchestrateur) — diagrammes d'architecture</title>
+<!--
+  Page autonome : ouvrir par double-clic dans un navigateur (Mermaid chargé via CDN).
+  Note : si un jour ces pages sont publiées comme Artifacts claude.ai, Mermaid y est
+  rendu nativement via des blocs ```mermaid / <pre class="mermaid"> SANS CDN — le
+  <script> CDN ci-dessous deviendrait alors inutile.
+-->
+<style>
+  :root { --accent: #FF8205; --ink: #1f2328; --muted: #57606a; --border: #e4e7eb; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1.5rem 4rem;
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink); background: #fdfcfb; line-height: 1.55;
+  }
+  main { max-width: 1150px; margin: 0 auto; }
+  h1 { color: var(--accent); font-size: 1.9rem; margin: 0 0 .3rem; }
+  h2 { color: var(--accent); font-size: 1.3rem; margin: 3rem 0 .4rem; border-bottom: 2px solid var(--border); padding-bottom: .3rem; }
+  p.lead { color: var(--muted); margin-top: 0; }
+  nav ul { margin: .5rem 0 0; padding-left: 1.2rem; }
+  nav a { color: var(--ink); }
+  code { background: #f3f1ee; padding: .1em .35em; border-radius: 4px; font-size: .9em; }
+  pre.mermaid {
+    background: #fff; border: 1px solid var(--border); border-radius: 8px;
+    padding: 1rem; overflow-x: auto; text-align: center;
+  }
+</style>
+</head>
+<body>
+<main>
+<h1>Parallel workers (orchestrateur)</h1>
+<p class="lead">Le tool <code>task</code> étendu : profil <code>worker</code> write-capable,
+chaque worker isolé dans son propre worktree git, sémaphore <code>max_parallel</code>,
+commit et merge-back effectués par le parent, conflits reportés (jamais résolus
+automatiquement), UI « fat cat + kittens ». Chaque nœud porte le nom réel du composant
+dans le code. Note : l'isolation dérive du profil d'agent
+(<code>AgentProfile.isolation</code>) — il n'existe pas d'argument <code>isolated</code>
+sur <code>TaskArgs</code>.</p>
+
+<nav>
+<strong>Sommaire</strong>
+<ul>
+  <li><a href="#archi">1. Architecture d'ensemble</a></li>
+  <li><a href="#sequence">2. Séquence : 3 workers dans un tour</a></li>
+  <li><a href="#etats">3. Cycle de vie d'un worker</a></li>
+</ul>
+</nav>
+
+<h2 id="archi">1. Architecture d'ensemble</h2>
+<p>Le loop parent émet N tool calls <code>task</code> dans un même tour ; chaque
+invocation acquiert le sémaphore partagé (<code>TaskToolState.semaphore</code>, défaut
+<code>max_parallel=4</code>), résout le profil, prépare un worktree isolé, puis — le loop
+du worker terminé — commit et tente le merge-back côté parent. Les événements portent
+l'identité de l'agent et pilotent la UI fat cat / kittens.</p>
+<pre class="mermaid">
+flowchart TB
+    LOOP["AgentLoop parent — orchestrateur<br/>_run_tools_concurrently"]
+
+    subgraph TASK_SG["vibe/core/tools/builtins/task.py"]
+        TASK["Task — BaseTool<br/>TaskArgs : task, agent"]
+        SEM["asyncio.Semaphore(max_parallel)<br/>TaskToolState — défaut 4, partagé"]
+        GUARD["garde : profil avec write tools<br/>et isolation NONE → ToolError"]
+        FIN["_finalize_worktree :<br/>commit_worktree par le PARENT<br/>message vibe agent: task"]
+        MERGE["_report_and_merge :<br/>merge_report en dry-run puis<br/>merge_branch si merge=auto et propre"]
+    end
+
+    subgraph PROF_SG["vibe/core/agents/models.py"]
+        WORKER["profil WORKER : SUBAGENT,<br/>AgentIsolation.WORKTREE, DESTRUCTIVE,<br/>grep, read_file, edit, write_file, bash, todo"]
+        EXPLORE["profil EXPLORE : SUBAGENT,<br/>AgentIsolation.NONE, lecture seule"]
+    end
+
+    subgraph WT_SG["vibe/core/worktree.py — un worktree par worker"]
+        W1["worktree 1<br/>branche vibe-worker-xxxxxxxx"]
+        W2["worktree 2<br/>sandbox : write_file / edit<br/>limités au worktree"]
+        WN["worktree N"]
+    end
+
+    subgraph UI_SG["vibe/cli/textual_ui"]
+        EH["EventHandler._mount_kitten<br/>handlers/event_handler.py"]
+        FAT["OrchestratorCatMessage — FAT_CAT_ART<br/>orchestrator · N kittens dispatched<br/>épinglé au-dessus du premier tool call"]
+        KIT["KittenMessage par worker — KITTEN_ART<br/>label : agent · branche · statut"]
+    end
+
+    LOOP -->|"N tool calls task<br/>dans un même tour"| TASK
+    TASK --- SEM
+    TASK --> GUARD
+    TASK -->|"résout args.agent"| WORKER
+    TASK -.->|"défaut allowlist"| EXPLORE
+    TASK -->|"prepare_worktree_session :<br/>git worktree add -b"| W1
+    TASK --> W2
+    TASK --> WN
+    W1 -->|"loop du worker terminé"| FIN
+    FIN -->|"git add -A puis git commit"| MERGE
+    MERGE -->|"git merge --no-ff --no-edit<br/>dans le checkout invoquant"| LOOP
+    MERGE -->|"conflit : merge_status=conflicts,<br/>conflicting_paths — jamais auto-résolu"| LOOP
+    TASK -->|"SubagentStartedEvent /<br/>SubagentFinishedEvent<br/>avec AgentIdentity"| EH
+    EH --> FAT
+    EH --> KIT
+    TASK -->|"TaskResult + suffixe :<br/>branche merged / conflicts /<br/>no changes / branch"| LOOP
+</pre>
+
+<h2 id="sequence">2. Séquence : 3 workers dispatchés dans un tour</h2>
+<p>Trois tool calls <code>task(agent=worker)</code> dans un même tour de l'assistant :
+travail concurrent dans trois worktrees, puis pour chaque worker le parent commit sa
+branche et fait un dry-run de merge (<code>git merge-tree</code>). Le cas conflit est
+reporté au LLM, jamais résolu automatiquement.</p>
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant LLM as AgentLoop parent (LLM)
+    participant T as Task tool
+    participant S as Semaphore max_parallel=4
+    participant W1 as Worker 1 — vibe-worker-aaaaaaaa
+    participant W2 as Worker 2 — vibe-worker-bbbbbbbb
+    participant W3 as Worker 3 — vibe-worker-cccccccc
+    participant G as Checkout parent (git)
+    participant UI as UI fat cat + kittens
+
+    LLM->>T: 3 tool calls task(agent=worker) dans UN tour
+    T->>S: acquire x3 (4 slots disponibles)
+
+    par worker 1
+        T->>G: prepare_worktree_session : git worktree add -b vibe-worker-aaaaaaaa
+        T-->>UI: SubagentStartedEvent : fat cat + kitten 1
+        T->>W1: subagent_loop.act(task)
+        W1-->>T: édite dans SON worktree (sandbox write limité au worktree)
+    and worker 2
+        T->>G: git worktree add -b vibe-worker-bbbbbbbb
+        T-->>UI: SubagentStartedEvent : kitten 2
+        T->>W2: subagent_loop.act(task)
+        W2-->>T: édite dans SON worktree
+    and worker 3
+        T->>G: git worktree add -b vibe-worker-cccccccc
+        T-->>UI: SubagentStartedEvent : kitten 3
+        T->>W3: subagent_loop.act(task)
+        W3-->>T: édite dans SON worktree
+    end
+
+    Note over T,G: chaque worker terminé : commit puis merge par le PARENT,<br/>séquentiellement dans la coroutine de chaque invocation
+
+    T->>G: commit_worktree branche 1 (git add -A, git commit)
+    T->>G: merge_report : git merge-tree --write-tree (dry-run)
+    alt propre et merge=auto
+        T->>G: git merge --no-ff --no-edit vibe-worker-aaaaaaaa
+        T-->>UI: SubagentFinishedEvent (merge_status=merged)
+        T-->>LLM: TaskResult — suffixe [vibe-worker-aaaaaaaa: merged]
+    else merge=manual (défaut)
+        T-->>LLM: TaskResult — suffixe [branch vibe-worker-aaaaaaaa], branche laissée au parent
+    end
+
+    T->>G: commit_worktree branche 2
+    T->>G: merge_report branche 2
+    alt conflit détecté au dry-run
+        T-->>UI: SubagentFinishedEvent (merge_status=conflicts)
+        T-->>LLM: TaskResult — [vibe-worker-bbbbbbbb: conflicts] + conflicting_paths,<br/>jamais résolu automatiquement
+    end
+
+    T->>G: commit_worktree branche 3 : rien à committer
+    T-->>LLM: TaskResult — suffixe [no changes]
+
+    Note over LLM,G: le parent peut ensuite merger manuellement les branches restantes<br/>et relancer les tests sur le checkout (orchestration côté LLM, hors task.py)
+</pre>
+
+<h2 id="etats">3. Cycle de vie d'un worker</h2>
+<p>Chaque invocation <code>task</code> est une coroutine indépendante : un worker qui
+échoue produit un <code>TaskResult</code> failed sans emporter ses frères. Le commit est
+toujours effectué par le parent après la fin du loop du worker (le worker a pour
+consigne de ne jamais lancer git lui-même).</p>
+<pre class="mermaid">
+stateDiagram-v2
+    state "Dispatché — tool call task, sémaphore acquis" as dispatched
+    state "Worktree créé — branche vibe-agent-idcourt" as wtcreated
+    state "Running — subagent_loop.act, écritures sandboxées au worktree" as running
+    state "Committed — commit_worktree par le parent" as committed
+    state "merged — git merge --no-ff dans le checkout parent" as merged
+    state "conflicts — reporté au LLM, jamais auto-résolu" as conflicts
+    state "not_attempted — merge=manual, branche laissée au parent" as notattempted
+    state "no_changes — rien à committer" as nochanges
+    state "failed — completed=false, frères non affectés" as failed
+
+    [*] --> dispatched
+    dispatched --> wtcreated : prepare_worktree_session, profil WORKER isolation WORKTREE
+    wtcreated --> running : SubagentStartedEvent
+    running --> committed : loop terminé, git add -A + commit par le parent
+    running --> failed : exception du subagent, réponse annotée Subagent error
+    committed --> merged : merge=auto et merge_report propre
+    committed --> conflicts : merge_report sale, merge_status=conflicts
+    committed --> notattempted : merge=manual, défaut
+    running --> nochanges : aucun diff dans le worktree
+    merged --> [*] : branche supprimée, worktree nettoyé
+    nochanges --> [*] : branche supprimée
+    conflicts --> [*] : branche conservée pour récupération manuelle
+    notattempted --> [*] : branche conservée
+    failed --> [*] : worktree conservé (keep_worktrees=on-failure)
+</pre>
+
+</main>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral" });
+</script>
+</body>
+</html>
