@@ -154,6 +154,22 @@ def test_thunk_patterns_are_not_flagged() -> None:
     assert parsed.meta.name == "x"
 
 
+def test_prompts_is_reserved() -> None:
+    script = 'meta = {"name": "x", "description": "d"}\nprompts = {}\n'
+    with pytest.raises(WorkflowScriptError, match="'prompts' is a workflow primitive"):
+        parse_workflow_script(script)
+
+
+def test_syntax_error_shows_offending_line_and_tip() -> None:
+    script = 'meta = {"name": "x", "description": "d"}\nx = "unterminated\n'
+    with pytest.raises(WorkflowScriptError) as exc_info:
+        parse_workflow_script(script)
+    message = str(exc_info.value)
+    assert "offending line" in message
+    assert "unterminated" in message
+    assert "prompts" in message
+
+
 def test_all_errors_reported_together() -> None:
     script = (
         'meta = {"name": "x", "description": "d"}\n'

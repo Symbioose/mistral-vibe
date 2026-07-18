@@ -36,6 +36,7 @@ from vibe.core.tools.builtins.write_file import WriteFileArgs, WriteFileResult
 from vibe.core.workflows.models import WorkflowStatus
 
 _LINE_NUMBER_PREFIX = re.compile(r"^ *\d+→")
+_PROMPT_PREVIEW_MAX_LEN = 80
 _BACKTICK_RUN = re.compile(r"`+")
 _UNSAFE_INFO_STRING = re.compile(r"[^A-Za-z0-9_+\-.]")
 _MAX_INFO_STRING_LEN = 32
@@ -434,6 +435,13 @@ class WorkflowApprovalWidget(ToolApprovalWidget[WorkflowArgs]):
         if self.args.script_path:
             yield NoMarkupStatic(
                 f"Script: {self.args.script_path}", classes="approval-description"
+            )
+        for key, prompt in (self.args.prompts or {}).items():
+            first_line = prompt.strip().splitlines()[0] if prompt.strip() else ""
+            if len(first_line) > _PROMPT_PREVIEW_MAX_LEN:
+                first_line = first_line[: _PROMPT_PREVIEW_MAX_LEN - 1] + "…"
+            yield NoMarkupStatic(
+                f'prompts["{key}"]: {first_line}', classes="approval-description"
             )
         if self.args.args is not None:
             yield NoMarkupStatic(

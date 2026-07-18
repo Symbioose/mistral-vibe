@@ -110,6 +110,23 @@ async def test_args_passthrough() -> None:
 
 
 @pytest.mark.asyncio
+async def test_prompts_passthrough() -> None:
+    spawner = FakeSpawner()
+    events: list[Any] = []
+    runtime = WorkflowRuntime(
+        parse_workflow_script(
+            make_script('value = await agent(prompts["deep"])\nreturn value')
+        ),
+        spawner,
+        prompts={"deep": "a very long brief"},
+        on_event=events.append,
+    )
+    outcome = await runtime.run()
+    assert outcome.status is WorkflowStatus.COMPLETED
+    assert spawner.calls[0].prompt == "a very long brief"
+
+
+@pytest.mark.asyncio
 async def test_parallel_runs_thunks_and_maps_errors_to_none() -> None:
     def responder(req: SubagentRequest) -> SubagentOutcome:
         if "bad" in req.prompt:

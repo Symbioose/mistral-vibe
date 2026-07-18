@@ -59,6 +59,7 @@ class WorkflowRuntime:
         spawner: SubagentSpawner,
         *,
         args: Any = None,
+        prompts: dict[str, str] | None = None,
         on_event: Callable[[WorkflowEvent], None] | None = None,
         journal: WorkflowJournal | None = None,
         max_concurrency: int | None = None,
@@ -68,6 +69,7 @@ class WorkflowRuntime:
         self._script = script
         self._spawner = spawner
         self._args = args
+        self._prompts = dict(prompts) if prompts else {}
         self._on_event = on_event
         self._journal = journal
         self._semaphore = asyncio.Semaphore(
@@ -136,6 +138,7 @@ class WorkflowRuntime:
             "log": self._log,
             "result": self._result,
             "args": self._args,
+            "prompts": self._prompts,
         }
 
     async def _agent(

@@ -78,6 +78,10 @@ class WorkflowArgs(BaseModel):
         default=None,
         description="Optional JSON value exposed to the script as the global `args`",
     )
+    prompts: dict[str, str] | None = Field(
+        default=None,
+        description='Long agent prompts as a JSON object, referenced in the script as prompts["key"]; ALWAYS put multi-line prose here instead of embedding it in Python strings',
+    )
     resume_from_run_id: str | None = Field(
         default=None,
         description="Run ID of a prior workflow invocation to resume from; successful agent() calls with unchanged (prompt, opts) replay instantly",
@@ -284,6 +288,7 @@ class Workflow(
             parsed,
             _AgentLoopSpawner(ctx, self.config),
             args=args.args,
+            prompts=args.prompts,
             on_event=queue.put_nowait,
             journal=journal,
             max_concurrency=self.config.max_concurrency,

@@ -58,6 +58,7 @@ Required meta fields: `name`, `description`. Optional: `phases`. Use the SAME ph
 - `log(message)` — emit a progress line to the user.
 - `return value` — a top-level return ends the script and sets the workflow's return value (JSON-serializable). `result(value)` exists as an alias but prefer `return`.
 - `args` — the value passed as the tool's `args` input, verbatim (`None` if not provided). Use it to parameterize workflows instead of hardcoding.
+- `prompts` — dict of the tool's `prompts` input. THIS IS WHERE AGENT PROMPTS LIVE: pass every multi-line or prose-heavy agent brief in the `prompts` tool argument (JSON handles quoting/newlines safely) and reference it as `prompts["key"]`, optionally composing per-item context: `agent(prompts["review"] + "\n\nFile: " + path)`. Embedding long prose directly in Python strings is the #1 cause of syntax errors — keep the script mechanical, keep the prose in JSON.
 
 RESERVED NAMES: `agent`, `parallel`, `pipeline`, `phase`, `log`, `result`, `args` are primitives — the script is REJECTED at parse time if any of them is used as a variable, parameter, or function name (e.g. `for result in ...` is invalid; use `for verdict in ...`).
 
@@ -75,23 +76,31 @@ Subagents are told their final text IS the return value (not a human-facing mess
 
 ## Patterns
 
-Canonical multi-stage review — pipeline by default, each dimension verifies as soon as its review completes:
+Canonical multi-stage review — pipeline by default, each dimension verifies as soon as its review completes. Note the tool call carries the prose in `prompts`; the script only references it:
+
+```json
+"prompts": {
+  "review:bugs": "You are reviewing <diff summary...>. Hunt for correctness bugs: ...",
+  "review:perf": "Same diff. Hunt for performance regressions: ...",
+  "verify": "A reviewer claims the following finding. Try hard to REFUTE it. Finding: "
+}
+```
 
 ```python
 meta = {"name": "review-changes", "description": "Review changed files, verify findings",
         "phases": [{"title": "Review"}, {"title": "Verify"}]}
-DIMENSIONS = [{"key": "bugs", "prompt": "..."}, {"key": "perf", "prompt": "..."}]
+DIMENSIONS = ["review:bugs", "review:perf"]
 
 async def verify_stage(review, item, i):
     return await parallel([
-        (lambda f=f: agent(f"Adversarially verify: {f['title']}", label=f"verify:{f['file']}",
+        (lambda f=f: agent(prompts["verify"] + json.dumps(f), label="verify:" + f["file"],
                            phase="Verify", schema=VERDICT_SCHEMA))
         for f in review["findings"]
     ])
 
 results = await pipeline(
     DIMENSIONS,
-    lambda d: agent(d["prompt"], label=f"review:{d['key']}", phase="Review", schema=FINDINGS_SCHEMA),
+    lambda key: agent(prompts[key], label=key, phase="Review", schema=FINDINGS_SCHEMA),
     verify_stage,
 )
 confirmed = [f for group in results if group for f in group if f and f.get("is_real")]
@@ -102,8 +111,9 @@ Loop-until-dry — for unknown-size discovery, keep spawning finders until 2 con
 
 ```python
 seen, confirmed, dry = set(), [], 0
+finder_keys = ["find:logic", "find:concurrency", "find:edge-cases"]  # prose in `prompts`
 while dry < 2:
-    found = await parallel([(lambda p=p: agent(p, phase="Find", schema=BUGS)) for p in FINDER_PROMPTS])
+    found = await parallel([(lambda k=k: agent(prompts[k], phase="Find", schema=BUGS)) for k in finder_keys])
     fresh = [b for r in found if r for b in r["bugs"] if key(b) not in seen]
     if not fresh:
         dry += 1

@@ -16,6 +16,7 @@ from vibe.core.workflows.errors import WorkflowScriptError
 from vibe.core.workflows.models import WorkflowMeta
 
 WORKFLOW_MAIN_NAME = "__workflow_main__"
+_OFFENDING_LINE_MAX_LEN = 120
 
 _ALLOWED_BUILTIN_NAMES = (
     "abs",
@@ -111,7 +112,7 @@ def parse_workflow_script(source: str) -> ParsedScript:
     try:
         tree = ast.parse(source)
     except SyntaxError as e:
-        raise WorkflowScriptError(f"script has a syntax error: {e}") from e
+        raise WorkflowScriptError(_format_syntax_error(source, e)) from e
 
     errors: list[str] = []
     meta: WorkflowMeta | None = None
@@ -144,6 +145,23 @@ def parse_workflow_script(source: str) -> ParsedScript:
     ast.fix_missing_locations(module)
     code = compile(module, filename=f"<workflow:{meta.name}>", mode="exec")
     return ParsedScript(meta=meta, code=code, source=source)
+
+
+def _format_syntax_error(source: str, e: SyntaxError) -> str:
+    message = f"script has a syntax error: {e.msg} (script line {e.lineno})"
+    lines = source.splitlines()
+    if e.lineno is not None and 1 <= e.lineno <= len(lines):
+        offending = lines[e.lineno - 1].strip()
+        if len(offending) > _OFFENDING_LINE_MAX_LEN:
+            offending = offending[: _OFFENDING_LINE_MAX_LEN - 1] + "…"
+        message += f"\n  offending line: {offending!r}"
+    if "string literal" in (e.msg or "") or "EOF" in (e.msg or ""):
+        message += (
+            "\n  Tip: do not embed long prose prompts as Python strings — pass them "
+            "in the `prompts` tool argument (a JSON object) and reference them as "
+            'prompts["key"] in the script.'
+        )
+    return message
 
 
 def build_script_globals(primitives: dict[str, Any]) -> dict[str, Any]:
@@ -206,6 +224,7 @@ RESERVED_PRIMITIVES = frozenset({
     "log",
     "result",
     "args",
+    "prompts",
 })
 
 
