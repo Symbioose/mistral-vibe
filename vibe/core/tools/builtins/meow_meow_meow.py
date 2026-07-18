@@ -11,7 +11,7 @@ import uuid
 
 from pydantic import BaseModel, Field
 
-from vibe.core.agents.models import AgentType, BuiltinAgentName
+from vibe.core.agents.models import AgentIsolation, AgentType, BuiltinAgentName
 from vibe.core.config import SessionLoggingConfig, VibeConfig
 from vibe.core.logger import logger
 from vibe.core.meowmeowmeow.errors import MeowMeowMeowScriptError
@@ -131,6 +131,7 @@ class _AgentLoopSpawner:
         # lazy startup (this module is imported by the result-widget registry).
         from vibe.core.agent_loop import AgentLoop
         from vibe.core.config.orchestrator_legacy import LegacyConfigOrchestrator
+        from vibe.core.tools.builtins.task import _WRITE_TOOLS
 
         ctx = self._ctx
         if not ctx.agent_manager:
@@ -145,6 +146,18 @@ class _AgentLoopSpawner:
             return SubagentOutcome(
                 success=False,
                 error=f"agent '{agent_name}' is not a subagent; only subagents can run inside meowmeowmeow",
+            )
+        enabled_tools = profile.overrides.get("enabled_tools")
+        if profile.isolation is not AgentIsolation.NONE or (
+            isinstance(enabled_tools, list) and _WRITE_TOOLS & set(enabled_tools)
+        ):
+            return SubagentOutcome(
+                success=False,
+                error=(
+                    f"agent '{agent_name}' enables write tools or requires worktree "
+                    "isolation; meowmeowmeow runs subagents directly in the checkout "
+                    "without isolation — use the task tool for write-capable workers"
+                ),
             )
 
         session_logging = SessionLoggingConfig(

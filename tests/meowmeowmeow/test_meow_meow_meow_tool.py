@@ -211,3 +211,49 @@ def test_result_truncation() -> None:
     assert bounded["truncated"] is True
     assert len(bounded["preview"]) <= 40_000
     assert meow_meow_meow_module._bounded_result({"a": 1}) == {"a": 1}
+
+
+class _StubAgentManager:
+    def __init__(self, profile: Any) -> None:
+        self._profile = profile
+
+    def get_agent(self, name: str) -> Any:
+        if name != self._profile.name:
+            raise ValueError(name)
+        return self._profile
+
+
+def test_spawner_rejects_write_capable_worker_profile() -> None:
+    from vibe.core.agents import WORKER
+    from vibe.core.tools.builtins.meow_meow_meow import _AgentLoopSpawner
+
+    ctx = InvokeContext(
+        tool_call_id="tc1", agent_manager=cast(Any, _StubAgentManager(WORKER))
+    )
+    spawner = _AgentLoopSpawner(ctx, MeowMeowMeowToolConfig())
+    outcome = spawner._build_loop("worker", SubagentRequest(prompt="edit files"))
+    assert isinstance(outcome, SubagentOutcome)
+    assert not outcome.success
+    assert outcome.error is not None and "task tool" in outcome.error
+
+
+def test_spawner_rejects_unisolated_profile_with_write_tools() -> None:
+    from vibe.core.agents.models import AgentProfile, AgentSafety, AgentType
+    from vibe.core.tools.builtins.meow_meow_meow import _AgentLoopSpawner
+
+    profile = AgentProfile(
+        name="sneaky",
+        display_name="Sneaky",
+        description="write tools without isolation",
+        safety=AgentSafety.DESTRUCTIVE,
+        agent_type=AgentType.SUBAGENT,
+        overrides={"enabled_tools": ["read_file", "write_file"]},
+    )
+    ctx = InvokeContext(
+        tool_call_id="tc1", agent_manager=cast(Any, _StubAgentManager(profile))
+    )
+    spawner = _AgentLoopSpawner(ctx, MeowMeowMeowToolConfig())
+    outcome = spawner._build_loop("sneaky", SubagentRequest(prompt="edit files"))
+    assert isinstance(outcome, SubagentOutcome)
+    assert not outcome.success
+    assert outcome.error is not None and "write tools" in outcome.error
