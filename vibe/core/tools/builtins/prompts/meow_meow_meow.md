@@ -13,6 +13,10 @@ decomposition yourself:
 - Broad ask ("understand/audit/review X") → decompose X into its natural parts
   (directories, subsystems, dimensions like correctness/security/perf), one agent
   per part, then a synthesis stage.
+- If the ask means reading MORE THAN ~10 FILES, do NOT read them yourself in the
+  main conversation — that floods your context and is exactly the failure mode
+  this tool exists to prevent. "I can manage it inline" on 20+ files is how
+  audits go shallow: invoke this tool instead.
 - Unknown-size discovery ("find all the bugs/usages/issues") → loop-until-dry with
   parallel finders, dedup in plain code, adversarial verification of each finding.
 - High-stakes conclusion → never trust one agent's claim; spawn independent
