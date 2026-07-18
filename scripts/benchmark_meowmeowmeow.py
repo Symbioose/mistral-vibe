@@ -325,6 +325,7 @@ async def bench_meow(
     planted: list[tuple[int, str]],
     *,
     batch_size: int,
+    concurrency: int | None,
     resume: bool,
 ) -> RunMetrics:
     name = "meow resume (journal)" if resume else "meow_meow_meow (parallel)"
@@ -345,6 +346,7 @@ async def bench_meow(
         args={"batches": batches, "schema": FINDINGS_SCHEMA},
         prompts={"review": REVIEW_BRIEF},
         journal=journal,
+        max_concurrency=concurrency,
     )
     start = time.monotonic()
     outcome = await runtime.run()
@@ -382,6 +384,7 @@ async def main() -> None:
     parser.add_argument("--bugs", type=int, default=8)
     parser.add_argument("--batch", type=int, default=BATCH_SIZE)
     parser.add_argument("--fillers", type=int, default=0)
+    parser.add_argument("--concurrency", type=int, default=None)
     parsed_args = parser.parse_args()
     out_dir = Path(parsed_args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -398,13 +401,25 @@ async def main() -> None:
     print(json.dumps(results[-1]), flush=True)
 
     meow = await bench_meow(
-        files, config, out_dir, planted, batch_size=parsed_args.batch, resume=False
+        files,
+        config,
+        out_dir,
+        planted,
+        batch_size=parsed_args.batch,
+        concurrency=parsed_args.concurrency,
+        resume=False,
     )
     results.append(meow.score())
     print(json.dumps(results[-1]), flush=True)
 
     replay = await bench_meow(
-        files, config, out_dir, planted, batch_size=parsed_args.batch, resume=True
+        files,
+        config,
+        out_dir,
+        planted,
+        batch_size=parsed_args.batch,
+        concurrency=parsed_args.concurrency,
+        resume=True,
     )
     results.append(replay.score())
     print(json.dumps(results[-1]), flush=True)
