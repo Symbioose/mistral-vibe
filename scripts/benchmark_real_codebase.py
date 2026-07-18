@@ -18,7 +18,6 @@ from contextlib import aclosing, suppress
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
-import re
 import time
 from typing import Any
 
@@ -290,6 +289,60 @@ for out in outs:
 return {"bugs": merged}
 """
 
+MEOW_VERIFIED_SCRIPT = """
+meta = {
+    "name": "bench-real-audit-verified",
+    "description": "Replayed scan plus adversarial verification of each finding",
+    "phases": [{"title": "Audit"}, {"title": "Verify"}],
+}
+phase("Audit")
+outs = await parallel([
+    (lambda batch=batch: agent(prompts["review"] + batch, schema=args["schema"]))
+    for batch in args["batches"]
+])
+merged = []
+for out in outs:
+    if out:
+        merged.extend(out.get("bugs", []))
+log(f"{len(merged)} findings candidats")
+
+phase("Verify")
+verdicts = await parallel([
+    (
+        lambda bug=bug: agent(
+            prompts["verify"] + json.dumps(bug),
+            label="verify:" + str(bug.get("file", "?")),
+            phase="Verify",
+            schema=args["verdict_schema"],
+        )
+    )
+    for bug in merged
+])
+confirmed = [b for b, v in zip(merged, verdicts) if v and v.get("confirmed")]
+log(f"{len(confirmed)} confirmes / {len(merged)}")
+return {"bugs": confirmed}
+"""
+
+VERDICT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "confirmed": {"type": "boolean"},
+        "reason": {"type": "string"},
+    },
+    "required": ["confirmed"],
+}
+
+VERIFY_BRIEF = (
+    "A reviewer claims the line below in a real library source file was "
+    "SABOTAGED with a single-token logic flip. The file lives in the corpus "
+    "directory {corpus_dir}. Read the file with read_file and study the "
+    "function around the claimed line. Confirm ONLY if the code as written "
+    "contradicts the obvious intent of the surrounding code (a flipped "
+    "comparison, and/or swap, off-by-one, is/is-not None). Pre-existing "
+    "library quirks are NOT sabotage: try hard to REFUTE. Respond ONLY with "
+    'JSON {{"confirmed": true|false, "reason": "..."}}. Claim: '
+)
+
 
 async def bench_meow(
     files: list[Path],
@@ -329,10 +382,53 @@ async def bench_meow(
     return metrics
 
 
+async def bench_meow_verified(
+    files: list[Path],
+    config: VibeConfig,
+    out_dir: Path,
+    truth: list[dict[str, Any]],
+    resume_from: str,
+) -> RunMetrics:
+    metrics = RunMetrics("meow + verify (scan rejoue)", truth)
+    batches = [
+        "\n".join(str(p) for p in files[i : i + BATCH_SIZE])
+        for i in range(0, len(files), BATCH_SIZE)
+    ]
+    spawner = BenchSpawner(config)
+    journal = MeowMeowMeowJournal.create(
+        out_dir / "verified.jsonl", resume_from=out_dir / resume_from
+    )
+    runtime = MeowMeowMeowRuntime(
+        parse_meow_meow_meow_script(MEOW_VERIFIED_SCRIPT),
+        spawner,
+        args={
+            "batches": batches,
+            "schema": FINDINGS_SCHEMA,
+            "verdict_schema": VERDICT_SCHEMA,
+        },
+        prompts={
+            "review": REVIEW_BRIEF,
+            "verify": VERIFY_BRIEF.format(corpus_dir=out_dir / "corpus"),
+        },
+        journal=journal,
+        max_concurrency=16,
+    )
+    start = time.monotonic()
+    outcome = await runtime.run()
+    metrics.wall_s = time.monotonic() - start
+    metrics.prompt_tokens = spawner.prompt_tokens
+    metrics.completion_tokens = spawner.completion_tokens
+    metrics.api_agents = spawner.api_calls
+    metrics.cached_agents = outcome.agents_cached
+    metrics.found = parse_findings(outcome.value)
+    return metrics
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="bench_real")
     parser.add_argument("--skip-baseline", action="store_true")
+    parser.add_argument("--verified-only", action="store_true")
     parsed_args = parser.parse_args()
     out_dir = Path(parsed_args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -352,6 +448,16 @@ async def main() -> None:
 
     config = load_config()
     results: list[dict[str, Any]] = []
+    if parsed_args.verified_only:
+        verified = await bench_meow_verified(
+            files, config, out_dir, truth, resume_from="resume.jsonl"
+        )
+        results.append(verified.score())
+        print(json.dumps(results[-1]), flush=True)
+        (out_dir / "results_verified.json").write_text(
+            json.dumps(results, indent=2), encoding="utf-8"
+        )
+        return
     if not parsed_args.skip_baseline:
         baseline = await bench_baseline(files, config, truth)
         results.append(baseline.score())
