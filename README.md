@@ -156,6 +156,32 @@ The `task` tool allows the agent to delegate work to subagents:
 
 Create custom subagents by adding `agent_type = "subagent"` to your agent configuration. Vibe comes with a built-in subagent called `explore`, a read-only subagent for codebase exploration used internally for delegation.
 
+#### Parallel Workers
+
+The built-in `worker` subagent can *implement code*, not just explore. Each worker runs inside its own git worktree on a dedicated branch (`vibe-worker-<id>`), so several workers can edit files concurrently without ever touching your checkout or each other:
+
+```
+> Implement the API endpoint and the CLI flag in parallel.
+
+🤖 I'll fan this out to two workers.
+
+> task(task="Add the /health endpoint ...", agent="worker")
+> task(task="Add the --verbose flag ...", agent="worker")
+```
+
+Inside its worktree a worker's file edits are pre-approved; outside they are denied. When a worker finishes, its changes are committed on its branch and reported back. Configure the behavior in `config.toml`:
+
+```toml
+[tools.task]
+allowlist = ["explore", "worker"]  # spawn workers without an approval prompt
+max_parallel = 4                   # concurrent subagents
+merge = "manual"                   # "auto" merges conflict-free branches back;
+                                   # conflicts are always reported, never resolved
+keep_worktrees = "on-failure"      # "always" | "on-failure" | "never"
+```
+
+Workers require a git repository. Custom write-capable subagents must set `isolation = "worktree"` in their profile. Note that rewind does not undo an `auto` merge — the default `manual` mode never touches your checkout.
+
 ### Interactive User Questions
 
 The `ask_user_question` tool allows the agent to ask you clarifying questions during its work. This enables more interactive and collaborative workflows.

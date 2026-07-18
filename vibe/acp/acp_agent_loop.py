@@ -183,6 +183,7 @@ from vibe.core.types import (
     ApprovalCallback,
     ApprovalResponse,
     AssistantEvent,
+    BaseEvent,
     CompactEndEvent,
     CompactStartEvent,
     ContextTooLongError as CoreContextTooLongError,
@@ -249,6 +250,17 @@ def _merge_non_interactive_disabled_tools(config: AnyVibeConfig) -> None:
     for tool in NON_INTERACTIVE_DISABLED_TOOLS:
         if tool not in config.disabled_tools:
             config.disabled_tools.append(tool)
+
+
+async def _root_agent_events(
+    events: AsyncGenerator[BaseEvent],
+) -> AsyncGenerator[BaseEvent]:
+    """Drop subagent-attributed events: they have no ACP representation yet,
+    so clients keep the summarized view the task tool streams.
+    """
+    async for event in events:
+        if event.agent is None:
+            yield event
 
 
 class ForkSessionParams(BaseModel):
@@ -1705,11 +1717,7 @@ class VibeAcpAgentLoop(AcpAgent):
                 images=images or None,
             )
         ) as events:
-            async for event in events:
-                # Subagent-attributed events have no ACP representation yet;
-                # clients keep the summarized view the task tool streams.
-                if event.agent is not None:
-                    continue
+            async for event in _root_agent_events(events):
                 if isinstance(event, UserMessageEvent):
                     field_meta = self._user_display_content_meta(user_display_content)
                     yield UserMessageChunk(
