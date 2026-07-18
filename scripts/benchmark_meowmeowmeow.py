@@ -112,18 +112,17 @@ BUGGY_FUNCTIONS = {
 
 FUNCTION_ORDER = list(OK_FUNCTIONS)
 
-# (file_index, function_name) — 8 bugs across 12 files, none greppable.
-PLANTED_BUGS: list[tuple[int, str]] = [
-    (0, "mean"),
-    (2, "running_total"),
-    (3, "clamp"),
-    (5, "last_index_of"),
-    (6, "count_evens"),
-    (8, "join_nonempty"),
-    (9, "mean"),
-    (11, "running_total"),
-]
-N_FILES = 12
+
+def plant_bugs(n_files: int, n_bugs: int) -> list[tuple[int, str]]:
+    planted: list[tuple[int, str]] = []
+    for k in range(n_bugs):
+        file_index = (k * n_files) // n_bugs
+        planted.append((file_index, FUNCTION_ORDER[k % len(FUNCTION_ORDER)]))
+    return planted
+
+
+def _filler(i: int) -> str:
+    return f"def helper_{i:02d}(x: int) -> int:\n    return x * {i + 2} + {i % 7}\n"
 
 FINDINGS_SCHEMA = {
     "type": "object",
@@ -154,19 +153,23 @@ REVIEW_BRIEF = (
 )
 
 
-def build_corpus(root: Path) -> list[Path]:
+def build_corpus(
+    root: Path, n_files: int, planted: list[tuple[int, str]], fillers: int
+) -> list[Path]:
     root.mkdir(parents=True, exist_ok=True)
-    planted = set(PLANTED_BUGS)
+    planted_set = set(planted)
     paths: list[Path] = []
-    for index in range(N_FILES):
+    for index in range(n_files):
         blocks = [f'"""Utility module m{index:02d}."""\n']
         for name in FUNCTION_ORDER:
             source = (
                 BUGGY_FUNCTIONS[name]
-                if (index, name) in planted
+                if (index, name) in planted_set
                 else OK_FUNCTIONS[name]
             )
             blocks.append(source)
+        for filler_index in range(fillers):
+            blocks.append(_filler(filler_index + index % 3))
         path = root / f"m{index:02d}.py"
         path.write_text("\n\n".join(blocks), encoding="utf-8")
         paths.append(path)
@@ -193,6 +196,7 @@ def make_loop(config: VibeConfig) -> AgentLoop:
 @dataclass
 class RunMetrics:
     name: str
+    planted: list[tuple[int, str]]
     wall_s: float = 0.0
     prompt_tokens: int = 0
     completion_tokens: int = 0
@@ -201,7 +205,7 @@ class RunMetrics:
     found: list[tuple[str, str]] = field(default_factory=list)
 
     def score(self) -> dict[str, Any]:
-        truth = {(f"m{i:02d}.py", fn) for i, fn in PLANTED_BUGS}
+        truth = {(f"m{i:02d}.py", fn) for i, fn in self.planted}
         found = set(self.found)
         hits = truth & found
         recall = len(hits) / len(truth)
@@ -237,7 +241,7 @@ def parse_findings(raw: Any) -> list[tuple[str, str]]:
 
 
 async def run_single_agent(prompt: str, config: VibeConfig) -> tuple[str, int, int]:
-    loop = make_loop(config)
+    loop = await asyncio.to_thread(make_loop, config)
     final: list[str] = []
     current_id: str | None = None
     try:
@@ -259,8 +263,10 @@ async def run_single_agent(prompt: str, config: VibeConfig) -> tuple[str, int, i
     )
 
 
-async def bench_baseline(files: list[Path], config: VibeConfig) -> RunMetrics:
-    metrics = RunMetrics("baseline (1 agent)")
+async def bench_baseline(
+    files: list[Path], config: VibeConfig, planted: list[tuple[int, str]]
+) -> RunMetrics:
+    metrics = RunMetrics("baseline (1 agent)", planted)
     listing = "\n".join(str(p) for p in files)
     prompt = REVIEW_BRIEF + listing
     start = time.monotonic()
@@ -316,14 +322,16 @@ async def bench_meow(
     files: list[Path],
     config: VibeConfig,
     journal_dir: Path,
+    planted: list[tuple[int, str]],
     *,
+    batch_size: int,
     resume: bool,
 ) -> RunMetrics:
     name = "meow resume (journal)" if resume else "meow_meow_meow (parallel)"
-    metrics = RunMetrics(name)
+    metrics = RunMetrics(name, planted)
     batches = [
-        "\n".join(str(p) for p in files[i : i + BATCH_SIZE])
-        for i in range(0, len(files), BATCH_SIZE)
+        "\n".join(str(p) for p in files[i : i + batch_size])
+        for i in range(0, len(files), batch_size)
     ]
     spawner = BenchSpawner(config)
     journal_path = journal_dir / ("resume.jsonl" if resume else "first.jsonl")
@@ -370,25 +378,34 @@ def render_report(rows: list[dict[str, Any]], out: Path) -> str:
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="bench_out")
+    parser.add_argument("--files", type=int, default=12)
+    parser.add_argument("--bugs", type=int, default=8)
+    parser.add_argument("--batch", type=int, default=BATCH_SIZE)
+    parser.add_argument("--fillers", type=int, default=0)
     parsed_args = parser.parse_args()
     out_dir = Path(parsed_args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    planted = plant_bugs(parsed_args.files, parsed_args.bugs)
     corpus_dir = out_dir / "corpus"
-    files = build_corpus(corpus_dir)
+    files = build_corpus(corpus_dir, parsed_args.files, planted, parsed_args.fillers)
     config = load_config()
-    print(f"corpus: {len(files)} files, {len(PLANTED_BUGS)} planted bugs", flush=True)
+    print(f"corpus: {len(files)} files, {len(planted)} planted bugs", flush=True)
 
     results: list[dict[str, Any]] = []
-    baseline = await bench_baseline(files, config)
+    baseline = await bench_baseline(files, config, planted)
     results.append(baseline.score())
     print(json.dumps(results[-1]), flush=True)
 
-    meow = await bench_meow(files, config, out_dir, resume=False)
+    meow = await bench_meow(
+        files, config, out_dir, planted, batch_size=parsed_args.batch, resume=False
+    )
     results.append(meow.score())
     print(json.dumps(results[-1]), flush=True)
 
-    replay = await bench_meow(files, config, out_dir, resume=True)
+    replay = await bench_meow(
+        files, config, out_dir, planted, batch_size=parsed_args.batch, resume=True
+    )
     results.append(replay.score())
     print(json.dumps(results[-1]), flush=True)
 

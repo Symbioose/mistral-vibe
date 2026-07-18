@@ -188,7 +188,9 @@ class _AgentLoopSpawner:
         self, request: SubagentRequest, on_progress: Callable[[str], None]
     ) -> SubagentOutcome:
         agent_name = request.agent_name or self._config.default_agent
-        loop = self._build_loop(agent_name, request)
+        # Loop construction does sync config/file IO; off-thread it so N
+        # concurrent spawns don't serialize the event loop.
+        loop = await asyncio.to_thread(self._build_loop, agent_name, request)
         if isinstance(loop, SubagentOutcome):
             return loop
 
