@@ -10,30 +10,30 @@ import traceback
 from typing import Any, Protocol
 
 from vibe.core.logger import logger
-from vibe.core.workflows.errors import WorkflowError, WorkflowScriptError
-from vibe.core.workflows.events import (
+from vibe.core.mioumioumiou.errors import MiouMiouMiouError, MiouMiouMiouScriptError
+from vibe.core.mioumioumiou.events import (
     AgentFinishedEvent,
     AgentProgressEvent,
     AgentStartedEvent,
+    MiouMiouMiouEvent,
+    MiouMiouMiouFinishedEvent,
+    MiouMiouMiouLogEvent,
     PhaseStartedEvent,
-    WorkflowEvent,
-    WorkflowFinishedEvent,
-    WorkflowLogEvent,
 )
-from vibe.core.workflows.journal import WorkflowJournal, journal_key
-from vibe.core.workflows.models import (
+from vibe.core.mioumioumiou.journal import MiouMiouMiouJournal, journal_key
+from vibe.core.mioumioumiou.models import (
     AgentRunStatus,
+    MiouMiouMiouRunOutcome,
+    MiouMiouMiouStatus,
     SubagentOutcome,
     SubagentRequest,
-    WorkflowRunOutcome,
-    WorkflowStatus,
 )
-from vibe.core.workflows.script import (
-    WORKFLOW_MAIN_NAME,
+from vibe.core.mioumioumiou.script import (
+    MIOUMIOUMIOU_MAIN_NAME,
     ParsedScript,
     build_script_globals,
 )
-from vibe.core.workflows.structured import (
+from vibe.core.mioumioumiou.structured import (
     check_schema_valid,
     parse_structured,
     schema_prompt_suffix,
@@ -57,7 +57,7 @@ def default_max_concurrency() -> int:
     return max(1, min(16, (os.cpu_count() or 4) - 2))
 
 
-class WorkflowRuntime:
+class MiouMiouMiouRuntime:
     def __init__(
         self,
         script: ParsedScript,
@@ -65,8 +65,8 @@ class WorkflowRuntime:
         *,
         args: Any = None,
         prompts: dict[str, str] | None = None,
-        on_event: Callable[[WorkflowEvent], None] | None = None,
-        journal: WorkflowJournal | None = None,
+        on_event: Callable[[MiouMiouMiouEvent], None] | None = None,
+        journal: MiouMiouMiouJournal | None = None,
         max_concurrency: int | None = None,
         max_agents: int = DEFAULT_MAX_AGENTS,
         schema_retries: int = DEFAULT_SCHEMA_RETRIES,
@@ -92,32 +92,32 @@ class WorkflowRuntime:
         self._result_set = False
         self._tasks: set[asyncio.Task[Any]] = set()
 
-    async def run(self) -> WorkflowRunOutcome:
+    async def run(self) -> MiouMiouMiouRunOutcome:
         start = time.monotonic()
         ns = build_script_globals(self._primitives())
         exec(self._script.code, ns)
-        main = ns[WORKFLOW_MAIN_NAME]
-        status = WorkflowStatus.COMPLETED
+        main = ns[MIOUMIOUMIOU_MAIN_NAME]
+        status = MiouMiouMiouStatus.COMPLETED
         value: Any = None
         error: str | None = None
         try:
             returned = await main()
             value = returned if returned is not None else self._result_value
         except asyncio.CancelledError:
-            status = WorkflowStatus.CANCELLED
+            status = MiouMiouMiouStatus.CANCELLED
             self._cancel_pending_tasks()
             raise
-        except WorkflowError as e:
-            status = WorkflowStatus.FAILED
+        except MiouMiouMiouError as e:
+            status = MiouMiouMiouStatus.FAILED
             error = str(e)
         except Exception as e:
-            status = WorkflowStatus.FAILED
+            status = MiouMiouMiouStatus.FAILED
             error = self._format_script_error(e)
         finally:
             self._cancel_pending_tasks()
-            if status is not WorkflowStatus.CANCELLED:
+            if status is not MiouMiouMiouStatus.CANCELLED:
                 self._emit(
-                    WorkflowFinishedEvent(
+                    MiouMiouMiouFinishedEvent(
                         status=status,
                         agents_spawned=self._agent_total,
                         agents_cached=self._agents_cached,
@@ -125,7 +125,7 @@ class WorkflowRuntime:
                         error=error,
                     )
                 )
-        return WorkflowRunOutcome(
+        return MiouMiouMiouRunOutcome(
             status=status,
             value=value,
             error=error,
@@ -157,13 +157,13 @@ class WorkflowRuntime:
         model: str | None = None,
     ) -> Any:
         if not isinstance(prompt, str) or not prompt.strip():
-            raise WorkflowScriptError("agent() prompt must be a non-empty string")
+            raise MiouMiouMiouScriptError("agent() prompt must be a non-empty string")
         if schema is not None:
             self._check_schema(schema)
         self._agent_total += 1
         if self._agent_total > self._max_agents:
-            raise WorkflowError(
-                f"workflow exceeded the lifetime cap of {self._max_agents} agent() calls"
+            raise MiouMiouMiouError(
+                f"miou_miou_miou exceeded the lifetime cap of {self._max_agents} agent() calls"
             )
         agent_id = self._agent_total
         display = label or self._truncate_label(prompt)
@@ -257,7 +257,7 @@ class WorkflowRuntime:
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                logger.warning("Workflow subagent crashed: %s", e)
+                logger.warning("MiouMiouMiou subagent crashed: %s", e)
                 return None, AgentRunStatus.ERROR, str(e)
             if not outcome.success:
                 return None, AgentRunStatus.ERROR, outcome.error or "subagent failed"
@@ -292,7 +292,7 @@ class WorkflowRuntime:
         item_list = list(items)
         self._check_fanout(len(item_list), "pipeline")
         if not stages:
-            raise WorkflowScriptError("pipeline() requires at least one stage")
+            raise MiouMiouMiouScriptError("pipeline() requires at least one stage")
         tasks = [
             self._spawn_task(self._run_chain(item, index, stages))
             for index, item in enumerate(item_list)
@@ -315,10 +315,10 @@ class WorkflowRuntime:
             return value
         except asyncio.CancelledError:
             raise
-        except WorkflowError:
+        except MiouMiouMiouError:
             raise
         except Exception as e:
-            logger.debug("Workflow parallel thunk failed: %s", e)
+            logger.debug("MiouMiouMiou parallel thunk failed: %s", e)
             return None
 
     async def _run_chain(
@@ -330,10 +330,12 @@ class WorkflowRuntime:
                 prev = await self._call_stage(stage, prev, item, index)
             except asyncio.CancelledError:
                 raise
-            except WorkflowError:
+            except MiouMiouMiouError:
                 raise
             except Exception as e:
-                logger.debug("Workflow pipeline stage failed for item %d: %s", index, e)
+                logger.debug(
+                    "MiouMiouMiou pipeline stage failed for item %d: %s", index, e
+                )
                 return None
         return prev
 
@@ -364,7 +366,7 @@ class WorkflowRuntime:
 
     def _phase(self, title: str) -> None:
         if not isinstance(title, str) or not title.strip():
-            raise WorkflowScriptError("phase() title must be a non-empty string")
+            raise MiouMiouMiouScriptError("phase() title must be a non-empty string")
         self._current_phase = title
         if title not in self._seen_phases:
             self._seen_phases.add(title)
@@ -374,13 +376,13 @@ class WorkflowRuntime:
         text = str(message)
         if len(text) > _LOG_MAX_LEN:
             text = text[: _LOG_MAX_LEN - 1] + "…"
-        self._emit(WorkflowLogEvent(message=text))
+        self._emit(MiouMiouMiouLogEvent(message=text))
 
     def _result(self, value: Any) -> None:
         try:
             json.dumps(value)
         except (TypeError, ValueError) as e:
-            raise WorkflowScriptError(
+            raise MiouMiouMiouScriptError(
                 f"result() value must be JSON-serializable: {e}"
             ) from e
         self._result_value = value
@@ -397,38 +399,38 @@ class WorkflowRuntime:
             if not task.done():
                 task.cancel()
 
-    def _emit(self, event: WorkflowEvent) -> None:
+    def _emit(self, event: MiouMiouMiouEvent) -> None:
         if self._on_event is None:
             return
         try:
             self._on_event(event)
         except Exception as e:
-            logger.warning("Workflow event callback failed: %s", e)
+            logger.warning("MiouMiouMiou event callback failed: %s", e)
 
     @staticmethod
     def _check_schema(schema: Any) -> None:
         if not isinstance(schema, dict):
-            raise WorkflowScriptError(
+            raise MiouMiouMiouScriptError(
                 "agent() schema must be a JSON Schema dict, e.g. "
                 '{"type": "object", "properties": {"summary": {"type": "string"}}}'
             )
         try:
             json.dumps(schema)
         except (TypeError, ValueError) as e:
-            raise WorkflowScriptError(
+            raise MiouMiouMiouScriptError(
                 "agent() schema must be JSON-serializable — use "
                 '{"type": "string"} style, never Python types like str'
             ) from e
         schema_error = check_schema_valid(schema)
         if schema_error is not None:
-            raise WorkflowScriptError(
+            raise MiouMiouMiouScriptError(
                 f"agent() schema is not a valid JSON Schema: {schema_error}"
             )
 
     @staticmethod
     def _check_fanout(count: int, name: str) -> None:
         if count > MAX_FANOUT_ITEMS:
-            raise WorkflowScriptError(
+            raise MiouMiouMiouScriptError(
                 f"{name}() accepts at most {MAX_FANOUT_ITEMS} items, got {count}"
             )
 
@@ -458,7 +460,7 @@ class WorkflowRuntime:
 
     def _format_script_error(self, e: Exception) -> str:
         frames = traceback.extract_tb(e.__traceback__)
-        script_file = f"<workflow:{self._script.meta.name}>"
+        script_file = f"<miou_miou_miou:{self._script.meta.name}>"
         script_frames = [f for f in frames if f.filename == script_file]
         location = ""
         if script_frames:

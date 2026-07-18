@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from vibe.core.workflows.structured import parse_structured
+from vibe.core.mioumioumiou.structured import parse_structured
 
 SCHEMA = {
     "type": "object",

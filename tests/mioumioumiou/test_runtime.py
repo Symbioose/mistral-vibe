@@ -8,21 +8,21 @@ from typing import Any
 
 import pytest
 
-from vibe.core.workflows.events import (
+from vibe.core.mioumioumiou.events import (
     AgentFinishedEvent,
     AgentStartedEvent,
+    MiouMiouMiouLogEvent,
     PhaseStartedEvent,
-    WorkflowLogEvent,
 )
-from vibe.core.workflows.journal import WorkflowJournal
-from vibe.core.workflows.models import (
+from vibe.core.mioumioumiou.journal import MiouMiouMiouJournal
+from vibe.core.mioumioumiou.models import (
     AgentRunStatus,
+    MiouMiouMiouStatus,
     SubagentOutcome,
     SubagentRequest,
-    WorkflowStatus,
 )
-from vibe.core.workflows.runtime import WorkflowRuntime
-from vibe.core.workflows.script import parse_workflow_script
+from vibe.core.mioumioumiou.runtime import MiouMiouMiouRuntime
+from vibe.core.mioumioumiou.script import parse_miou_miou_miou_script
 
 Responder = Callable[[SubagentRequest], SubagentOutcome | Awaitable[SubagentOutcome]]
 
@@ -52,23 +52,23 @@ class FakeSpawner:
 
 
 def make_script(body: str, name: str = "test") -> str:
-    return f'meta = {{"name": "{name}", "description": "test workflow"}}\n{body}'
+    return f'meta = {{"name": "{name}", "description": "test miou_miou_miou"}}\n{body}'
 
 
-async def run_workflow(
+async def run_miou_miou_miou(
     body: str,
     spawner: FakeSpawner | None = None,
     *,
     args: Any = None,
-    journal: WorkflowJournal | None = None,
+    journal: MiouMiouMiouJournal | None = None,
     max_concurrency: int | None = None,
     max_agents: int = 1000,
     schema_retries: int = 2,
 ) -> tuple[Any, FakeSpawner, list[Any]]:
     spawner = spawner or FakeSpawner()
     events: list[Any] = []
-    runtime = WorkflowRuntime(
-        parse_workflow_script(make_script(body)),
+    runtime = MiouMiouMiouRuntime(
+        parse_miou_miou_miou_script(make_script(body)),
         spawner,
         args=args,
         on_event=events.append,
@@ -83,10 +83,10 @@ async def run_workflow(
 
 @pytest.mark.asyncio
 async def test_simple_agent_call() -> None:
-    outcome, spawner, _events = await run_workflow(
+    outcome, spawner, _events = await run_miou_miou_miou(
         'response = await agent("do something")\nresult(response)'
     )
-    assert outcome.status is WorkflowStatus.COMPLETED
+    assert outcome.status is MiouMiouMiouStatus.COMPLETED
     assert outcome.value == "ok"
     assert outcome.agents_spawned == 1
     assert spawner.calls[0].prompt == "do something"
@@ -94,16 +94,16 @@ async def test_simple_agent_call() -> None:
 
 @pytest.mark.asyncio
 async def test_top_level_return() -> None:
-    outcome, _spawner, _events = await run_workflow(
+    outcome, _spawner, _events = await run_miou_miou_miou(
         'value = await agent("x")\nreturn {"got": value}'
     )
-    assert outcome.status is WorkflowStatus.COMPLETED
+    assert outcome.status is MiouMiouMiouStatus.COMPLETED
     assert outcome.value == {"got": "ok"}
 
 
 @pytest.mark.asyncio
 async def test_args_passthrough() -> None:
-    outcome, _spawner, _events = await run_workflow(
+    outcome, _spawner, _events = await run_miou_miou_miou(
         "result(args['items'])", args={"items": [1, 2]}
     )
     assert outcome.value == [1, 2]
@@ -113,8 +113,8 @@ async def test_args_passthrough() -> None:
 async def test_prompts_passthrough() -> None:
     spawner = FakeSpawner()
     events: list[Any] = []
-    runtime = WorkflowRuntime(
-        parse_workflow_script(
+    runtime = MiouMiouMiouRuntime(
+        parse_miou_miou_miou_script(
             make_script('value = await agent(prompts["deep"])\nreturn value')
         ),
         spawner,
@@ -122,7 +122,7 @@ async def test_prompts_passthrough() -> None:
         on_event=events.append,
     )
     outcome = await runtime.run()
-    assert outcome.status is WorkflowStatus.COMPLETED
+    assert outcome.status is MiouMiouMiouStatus.COMPLETED
     assert spawner.calls[0].prompt == "a very long brief"
 
 
@@ -142,8 +142,8 @@ async def test_parallel_runs_thunks_and_maps_errors_to_none() -> None:
         "])\n"
         "result(outs)"
     )
-    outcome, _spawner, _events = await run_workflow(body, FakeSpawner(responder))
-    assert outcome.status is WorkflowStatus.COMPLETED
+    outcome, _spawner, _events = await run_miou_miou_miou(body, FakeSpawner(responder))
+    assert outcome.status is MiouMiouMiouStatus.COMPLETED
     assert outcome.value == ["one", None, None, "two"]
 
 
@@ -160,8 +160,8 @@ async def test_pipeline_stages_and_arity() -> None:
         "result(outs)"
     )
     responder = lambda req: SubagentOutcome(success=True, text=req.prompt.upper())
-    outcome, _spawner, _events = await run_workflow(body, FakeSpawner(responder))
-    assert outcome.status is WorkflowStatus.COMPLETED
+    outcome, _spawner, _events = await run_miou_miou_miou(body, FakeSpawner(responder))
+    assert outcome.status is MiouMiouMiouStatus.COMPLETED
     assert outcome.value == ["A|a|0", "B|b|1"]
 
 
@@ -173,8 +173,8 @@ async def test_pipeline_stage_error_drops_item_to_none() -> None:
         "outs = await pipeline([1, 2], lambda item: item * 10, explode)\n"
         "result(outs)"
     )
-    outcome, _spawner, _events = await run_workflow(body)
-    assert outcome.status is WorkflowStatus.COMPLETED
+    outcome, _spawner, _events = await run_miou_miou_miou(body)
+    assert outcome.status is MiouMiouMiouStatus.COMPLETED
     assert outcome.value == [None, None]
 
 
@@ -197,10 +197,10 @@ async def test_pipeline_has_no_barrier_between_stages() -> None:
         ")\n"
         "result(outs)"
     )
-    outcome, _spawner, events = await run_workflow(
+    outcome, _spawner, events = await run_miou_miou_miou(
         body, FakeSpawner(responder), max_concurrency=4
     )
-    assert outcome.status is WorkflowStatus.COMPLETED
+    assert outcome.status is MiouMiouMiouStatus.COMPLETED
     assert outcome.value == ["s2-slow", "s2-fast"]
     finished = [e.label for e in events if isinstance(e, AgentFinishedEvent)]
     assert finished.index("s2-fast") < finished.index("s1-slow")
@@ -218,8 +218,10 @@ async def test_concurrency_cap_respected() -> None:
         + "\n".join(f'    lambda: agent("p{i}"),' for i in range(8))
         + "\n])\nresult(len([o for o in outs if o]))"
     )
-    outcome, spawner, _events = await run_workflow(body, spawner, max_concurrency=2)
-    assert outcome.status is WorkflowStatus.COMPLETED
+    outcome, spawner, _events = await run_miou_miou_miou(
+        body, spawner, max_concurrency=2
+    )
+    assert outcome.status is MiouMiouMiouStatus.COMPLETED
     assert outcome.value == 8
     assert spawner.max_active <= 2
 
@@ -239,8 +241,8 @@ async def test_schema_validation_with_retry() -> None:
         '"properties": {"n": {"type": "integer"}}, "required": ["n"]})\n'
         "result(value)"
     )
-    outcome, _spawner, _events = await run_workflow(body, FakeSpawner(responder))
-    assert outcome.status is WorkflowStatus.COMPLETED
+    outcome, _spawner, _events = await run_miou_miou_miou(body, FakeSpawner(responder))
+    assert outcome.status is MiouMiouMiouStatus.COMPLETED
     assert outcome.value == {"n": 5}
     assert len(attempts) == 2
     assert "rejected" in attempts[1]
@@ -253,10 +255,10 @@ async def test_schema_exhausted_retries_returns_none() -> None:
         'value = await agent("x", schema={"type": "object"})\n'
         "result({'value': value})"
     )
-    outcome, spawner, events = await run_workflow(
+    outcome, spawner, events = await run_miou_miou_miou(
         body, FakeSpawner(responder), schema_retries=1
     )
-    assert outcome.status is WorkflowStatus.COMPLETED
+    assert outcome.status is MiouMiouMiouStatus.COMPLETED
     assert outcome.value == {"value": None}
     assert len(spawner.calls) == 2
     finished = [e for e in events if isinstance(e, AgentFinishedEvent)]
@@ -266,10 +268,10 @@ async def test_schema_exhausted_retries_returns_none() -> None:
 @pytest.mark.asyncio
 async def test_failed_agent_returns_none() -> None:
     responder = lambda _req: SubagentOutcome(success=False, error="dead")
-    outcome, _spawner, events = await run_workflow(
+    outcome, _spawner, events = await run_miou_miou_miou(
         'value = await agent("x")\nresult({"value": value})', FakeSpawner(responder)
     )
-    assert outcome.status is WorkflowStatus.COMPLETED
+    assert outcome.status is MiouMiouMiouStatus.COMPLETED
     assert outcome.value == {"value": None}
     finished = [e for e in events if isinstance(e, AgentFinishedEvent)]
     assert finished[0].status is AgentRunStatus.ERROR
@@ -286,10 +288,10 @@ async def test_phases_and_logs_emit_events() -> None:
         'await agent("b")\n'
         "result(None)"
     )
-    _outcome, _spawner, events = await run_workflow(body)
+    _outcome, _spawner, events = await run_miou_miou_miou(body)
     phase_titles = [e.title for e in events if isinstance(e, PhaseStartedEvent)]
     assert phase_titles == ["Scan", "Fix"]
-    logs = [e.message for e in events if isinstance(e, WorkflowLogEvent)]
+    logs = [e.message for e in events if isinstance(e, MiouMiouMiouLogEvent)]
     assert logs == ["starting scan"]
     started = [e for e in events if isinstance(e, AgentStartedEvent)]
     assert started[0].phase == "Custom"
@@ -298,34 +300,36 @@ async def test_phases_and_logs_emit_events() -> None:
 
 @pytest.mark.asyncio
 async def test_print_is_logged() -> None:
-    _outcome, _spawner, events = await run_workflow('print("hello", 1)\nresult(None)')
-    logs = [e.message for e in events if isinstance(e, WorkflowLogEvent)]
+    _outcome, _spawner, events = await run_miou_miou_miou(
+        'print("hello", 1)\nresult(None)'
+    )
+    logs = [e.message for e in events if isinstance(e, MiouMiouMiouLogEvent)]
     assert logs == ["hello 1"]
 
 
 @pytest.mark.asyncio
-async def test_max_agents_cap_fails_workflow() -> None:
+async def test_max_agents_cap_fails_miou_miou_miou() -> None:
     body = "for i in range(5):\n    await agent(f'p{i}')\nresult(None)"
-    outcome, spawner, _events = await run_workflow(body, max_agents=3)
-    assert outcome.status is WorkflowStatus.FAILED
+    outcome, spawner, _events = await run_miou_miou_miou(body, max_agents=3)
+    assert outcome.status is MiouMiouMiouStatus.FAILED
     assert outcome.error is not None
     assert "lifetime cap" in outcome.error
     assert len(spawner.calls) == 3
 
 
 @pytest.mark.asyncio
-async def test_fanout_cap_fails_workflow() -> None:
+async def test_fanout_cap_fails_miou_miou_miou() -> None:
     body = "await parallel([lambda: agent('x')] * 5000)\nresult(None)"
-    outcome, _spawner, _events = await run_workflow(body)
-    assert outcome.status is WorkflowStatus.FAILED
+    outcome, _spawner, _events = await run_miou_miou_miou(body)
+    assert outcome.status is MiouMiouMiouStatus.FAILED
     assert outcome.error is not None
     assert "at most" in outcome.error
 
 
 @pytest.mark.asyncio
 async def test_script_exception_fails_with_location() -> None:
-    outcome, _spawner, _events = await run_workflow("x = {}\nx['missing']")
-    assert outcome.status is WorkflowStatus.FAILED
+    outcome, _spawner, _events = await run_miou_miou_miou("x = {}\nx['missing']")
+    assert outcome.status is MiouMiouMiouStatus.FAILED
     assert outcome.error is not None
     assert "KeyError" in outcome.error
     assert "script line" in outcome.error
@@ -334,34 +338,36 @@ async def test_script_exception_fails_with_location() -> None:
 
 
 @pytest.mark.asyncio
-async def test_banned_time_fails_workflow() -> None:
-    outcome, _spawner, _events = await run_workflow("t = time.time()\nresult(t)")
-    assert outcome.status is WorkflowStatus.FAILED
+async def test_banned_time_fails_miou_miou_miou() -> None:
+    outcome, _spawner, _events = await run_miou_miou_miou("t = time.time()\nresult(t)")
+    assert outcome.status is MiouMiouMiouStatus.FAILED
     assert outcome.error is not None
     assert "unavailable" in outcome.error
 
 
 @pytest.mark.asyncio
 async def test_non_serializable_result_rejected() -> None:
-    outcome, _spawner, _events = await run_workflow("result(lambda: 1)")
-    assert outcome.status is WorkflowStatus.FAILED
+    outcome, _spawner, _events = await run_miou_miou_miou("result(lambda: 1)")
+    assert outcome.status is MiouMiouMiouStatus.FAILED
     assert outcome.error is not None
     assert "JSON-serializable" in outcome.error
 
 
 @pytest.mark.asyncio
 async def test_journal_replay_skips_spawner(tmp_path: Path) -> None:
-    journal_one = WorkflowJournal.create(tmp_path / "run1.jsonl")
+    journal_one = MiouMiouMiouJournal.create(tmp_path / "run1.jsonl")
     body = 'value = await agent("expensive")\nresult(value)'
-    outcome_one, spawner_one, _e = await run_workflow(body, journal=journal_one)
-    assert outcome_one.status is WorkflowStatus.COMPLETED
+    outcome_one, spawner_one, _e = await run_miou_miou_miou(body, journal=journal_one)
+    assert outcome_one.status is MiouMiouMiouStatus.COMPLETED
     assert len(spawner_one.calls) == 1
 
-    journal_two = WorkflowJournal.create(
+    journal_two = MiouMiouMiouJournal.create(
         tmp_path / "run2.jsonl", resume_from=tmp_path / "run1.jsonl"
     )
-    outcome_two, spawner_two, events_two = await run_workflow(body, journal=journal_two)
-    assert outcome_two.status is WorkflowStatus.COMPLETED
+    outcome_two, spawner_two, events_two = await run_miou_miou_miou(
+        body, journal=journal_two
+    )
+    assert outcome_two.status is MiouMiouMiouStatus.COMPLETED
     assert outcome_two.value == "ok"
     assert len(spawner_two.calls) == 0
     assert outcome_two.agents_cached == 1
@@ -371,13 +377,15 @@ async def test_journal_replay_skips_spawner(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_journal_replay_only_matches_same_prompt(tmp_path: Path) -> None:
-    journal_one = WorkflowJournal.create(tmp_path / "run1.jsonl")
-    await run_workflow('await agent("old prompt")\nresult(None)', journal=journal_one)
+    journal_one = MiouMiouMiouJournal.create(tmp_path / "run1.jsonl")
+    await run_miou_miou_miou(
+        'await agent("old prompt")\nresult(None)', journal=journal_one
+    )
 
-    journal_two = WorkflowJournal.create(
+    journal_two = MiouMiouMiouJournal.create(
         tmp_path / "run2.jsonl", resume_from=tmp_path / "run1.jsonl"
     )
-    _outcome, spawner_two, _events = await run_workflow(
+    _outcome, spawner_two, _events = await run_miou_miou_miou(
         'await agent("new prompt")\nresult(None)', journal=journal_two
     )
     assert len(spawner_two.calls) == 1
@@ -386,17 +394,17 @@ async def test_journal_replay_only_matches_same_prompt(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_failed_agents_not_journaled(tmp_path: Path) -> None:
     responder_fail = lambda _req: SubagentOutcome(success=False, error="boom")
-    journal_one = WorkflowJournal.create(tmp_path / "run1.jsonl")
-    await run_workflow(
+    journal_one = MiouMiouMiouJournal.create(tmp_path / "run1.jsonl")
+    await run_miou_miou_miou(
         'await agent("flaky")\nresult(None)',
         FakeSpawner(responder_fail),
         journal=journal_one,
     )
 
-    journal_two = WorkflowJournal.create(
+    journal_two = MiouMiouMiouJournal.create(
         tmp_path / "run2.jsonl", resume_from=tmp_path / "run1.jsonl"
     )
-    _outcome, spawner_two, _events = await run_workflow(
+    _outcome, spawner_two, _events = await run_miou_miou_miou(
         'await agent("flaky")\nresult(None)', journal=journal_two
     )
     assert len(spawner_two.calls) == 1
@@ -411,8 +419,8 @@ async def test_cancellation_propagates() -> None:
         await asyncio.sleep(30)
         return SubagentOutcome(success=True, text="never")
 
-    runtime = WorkflowRuntime(
-        parse_workflow_script(make_script('await agent("x")\nresult(None)')),
+    runtime = MiouMiouMiouRuntime(
+        parse_miou_miou_miou_script(make_script('await agent("x")\nresult(None)')),
         FakeSpawner(responder),
     )
     task = asyncio.create_task(runtime.run())
@@ -434,7 +442,7 @@ async def test_progress_callback_emits_events() -> None:
             on_progress("read_file: done")
             return await super().run(request, on_progress)
 
-    _outcome, _spawner, events = await run_workflow(
+    _outcome, _spawner, events = await run_miou_miou_miou(
         'await agent("x")\nresult(None)', ProgressSpawner(responder)
     )
     progress = [e for e in events if e.kind == "agent_progress"]
@@ -443,6 +451,6 @@ async def test_progress_callback_emits_events() -> None:
 
 @pytest.mark.asyncio
 async def test_empty_script_body_completes() -> None:
-    outcome, _spawner, _events = await run_workflow("")
-    assert outcome.status is WorkflowStatus.COMPLETED
+    outcome, _spawner, _events = await run_miou_miou_miou("")
+    assert outcome.status is MiouMiouMiouStatus.COMPLETED
     assert outcome.value is None

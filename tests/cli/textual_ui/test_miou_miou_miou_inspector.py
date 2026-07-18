@@ -4,9 +4,14 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import Tree
 
+from vibe.cli.textual_ui.widgets.miou_miou_miou import (
+    MiouMiouMiouAgentRow,
+    MiouMiouMiouCallMessage,
+)
+from vibe.cli.textual_ui.widgets.miou_miou_miou_inspector import (
+    MiouMiouMiouInspectorScreen,
+)
 from vibe.cli.textual_ui.widgets.no_markup_static import NoMarkupStatic
-from vibe.cli.textual_ui.widgets.workflow import WorkflowAgentRow, WorkflowCallMessage
-from vibe.cli.textual_ui.widgets.workflow_inspector import WorkflowInspectorScreen
 
 
 class _Harness(App[None]):
@@ -14,11 +19,11 @@ class _Harness(App[None]):
         yield from ()
 
 
-async def _make_workflow(app: _Harness) -> WorkflowCallMessage:
-    widget = WorkflowCallMessage(tool_name="workflow")
+async def _make_miou_miou_miou(app: _Harness) -> MiouMiouMiouCallMessage:
+    widget = MiouMiouMiouCallMessage(tool_name="miou_miou_miou")
     await app.mount(widget)
-    await widget.handle_workflow_event({"kind": "phase_started", "title": "Scan"})
-    await widget.handle_workflow_event({
+    await widget.handle_miou_miou_miou_event({"kind": "phase_started", "title": "Scan"})
+    await widget.handle_miou_miou_miou_event({
         "kind": "agent_started",
         "agent_id": 1,
         "label": "scan:core",
@@ -26,12 +31,12 @@ async def _make_workflow(app: _Harness) -> WorkflowCallMessage:
         "cached": False,
         "prompt": "Analyse vibe/core in depth and report the architecture.",
     })
-    await widget.handle_workflow_event({
+    await widget.handle_miou_miou_miou_event({
         "kind": "agent_progress",
         "agent_id": 1,
         "message": "▸ Reading vibe/core/agent_loop",
     })
-    await widget.handle_workflow_event({
+    await widget.handle_miou_miou_miou_event({
         "kind": "agent_started",
         "agent_id": 2,
         "label": "scan:cli",
@@ -39,7 +44,7 @@ async def _make_workflow(app: _Harness) -> WorkflowCallMessage:
         "cached": False,
         "prompt": "Analyse vibe/cli in depth.",
     })
-    await widget.handle_workflow_event({
+    await widget.handle_miou_miou_miou_event({
         "kind": "agent_finished",
         "agent_id": 2,
         "status": "ok",
@@ -53,8 +58,8 @@ async def _make_workflow(app: _Harness) -> WorkflowCallMessage:
 async def test_inspector_builds_tree_and_detail() -> None:
     app = _Harness()
     async with app.run_test() as pilot:
-        widget = await _make_workflow(app)
-        screen = WorkflowInspectorScreen(widget)
+        widget = await _make_miou_miou_miou(app)
+        screen = MiouMiouMiouInspectorScreen(widget)
         await app.push_screen(screen)
         await pilot.pause()
 
@@ -75,44 +80,44 @@ async def test_inspector_builds_tree_and_detail() -> None:
 async def test_inspector_live_updates_detail() -> None:
     app = _Harness()
     async with app.run_test() as pilot:
-        widget = await _make_workflow(app)
-        screen = WorkflowInspectorScreen(widget)
+        widget = await _make_miou_miou_miou(app)
+        screen = MiouMiouMiouInspectorScreen(widget)
         await app.push_screen(screen)
         await pilot.pause()
         screen._selected_agent = 1
         screen._rendered_log_len = -1
         screen._refresh_detail()
 
-        await widget.handle_workflow_event({
+        await widget.handle_miou_miou_miou_event({
             "kind": "agent_progress",
             "agent_id": 1,
-            "message": "grep: found workflow runtime",
+            "message": "grep: found miou_miou_miou runtime",
         })
         screen._sync()
         await pilot.pause()
         detail_text = " ".join(str(w.render()) for w in screen.query(NoMarkupStatic))
-        assert "found workflow runtime" in detail_text
+        assert "found miou_miou_miou runtime" in detail_text
 
 
 @pytest.mark.asyncio
 async def test_inspector_escape_dismisses() -> None:
     app = _Harness()
     async with app.run_test() as pilot:
-        widget = await _make_workflow(app)
-        await app.push_screen(WorkflowInspectorScreen(widget))
+        widget = await _make_miou_miou_miou(app)
+        await app.push_screen(MiouMiouMiouInspectorScreen(widget))
         await pilot.pause()
-        assert isinstance(app.screen, WorkflowInspectorScreen)
+        assert isinstance(app.screen, MiouMiouMiouInspectorScreen)
         await pilot.press("escape")
         await pilot.pause()
-        assert not isinstance(app.screen, WorkflowInspectorScreen)
+        assert not isinstance(app.screen, MiouMiouMiouInspectorScreen)
 
 
 @pytest.mark.asyncio
 async def test_inspector_shows_output_for_finished_agent() -> None:
     app = _Harness()
     async with app.run_test() as pilot:
-        widget = await _make_workflow(app)
-        screen = WorkflowInspectorScreen(widget, initial_agent=2)
+        widget = await _make_miou_miou_miou(app)
+        screen = MiouMiouMiouInspectorScreen(widget, initial_agent=2)
         await app.push_screen(screen)
         await pilot.pause()
         detail_text = " ".join(str(w.render()) for w in screen.query(NoMarkupStatic))
@@ -124,14 +129,14 @@ async def test_inspector_shows_output_for_finished_agent() -> None:
 async def test_follow_mode_tracks_latest_running_agent() -> None:
     app = _Harness()
     async with app.run_test() as pilot:
-        widget = await _make_workflow(app)
-        screen = WorkflowInspectorScreen(widget)
+        widget = await _make_miou_miou_miou(app)
+        screen = MiouMiouMiouInspectorScreen(widget)
         await app.push_screen(screen)
         await pilot.pause()
         assert screen._follow is True
         assert screen._selected_agent == 1
 
-        await widget.handle_workflow_event({
+        await widget.handle_miou_miou_miou_event({
             "kind": "agent_started",
             "agent_id": 3,
             "label": "scan:acp",
@@ -148,8 +153,8 @@ async def test_follow_mode_tracks_latest_running_agent() -> None:
 async def test_phase_nodes_show_counts() -> None:
     app = _Harness()
     async with app.run_test() as pilot:
-        widget = await _make_workflow(app)
-        screen = WorkflowInspectorScreen(widget)
+        widget = await _make_miou_miou_miou(app)
+        screen = MiouMiouMiouInspectorScreen(widget)
         await app.push_screen(screen)
         await pilot.pause()
         phase_node = screen._phase_nodes["Scan"]
@@ -160,8 +165,8 @@ async def test_phase_nodes_show_counts() -> None:
 async def test_agent_row_records_prompt_and_log() -> None:
     app = _Harness()
     async with app.run_test():
-        widget = await _make_workflow(app)
-        rows: dict[int, WorkflowAgentRow] = widget.agent_rows
+        widget = await _make_miou_miou_miou(app)
+        rows: dict[int, MiouMiouMiouAgentRow] = widget.agent_rows
         assert rows[1].prompt is not None
         assert rows[1].prompt.startswith("Analyse vibe/core")
         assert rows[1].activity_log == ["▸ Reading vibe/core/agent_loop"]

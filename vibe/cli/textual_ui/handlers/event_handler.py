@@ -15,9 +15,9 @@ from vibe.cli.textual_ui.widgets.messages import (
     PlanFileMessage,
     ReasoningMessage,
 )
+from vibe.cli.textual_ui.widgets.miou_miou_miou import MiouMiouMiouCallMessage
 from vibe.cli.textual_ui.widgets.no_markup_static import NoMarkupStatic
 from vibe.cli.textual_ui.widgets.tools import ToolCallMessage, ToolResultMessage
-from vibe.cli.textual_ui.widgets.workflow import WorkflowCallMessage
 from vibe.core.hooks.models import (
     HookEndEvent,
     HookEvent,
@@ -220,8 +220,8 @@ class EventHandler:
         else:
             # A follow-up tool call is the recovery signal: leave prior errors muted.
             self._resolve_pending_errors(escalate=False)
-            if event.tool_name == "workflow":
-                tool_call = WorkflowCallMessage(event)
+            if event.tool_name == "miou_miou_miou":
+                tool_call = MiouMiouMiouCallMessage(event)
             else:
                 tool_call = ToolCallMessage(event)
             if tool_call_id:
@@ -267,8 +267,8 @@ class EventHandler:
         tool_call = self.tool_calls.get(event.tool_call_id)
         if tool_call is None:
             return
-        if isinstance(tool_call, WorkflowCallMessage) and event.data is not None:
-            await tool_call.handle_workflow_event(event.data)
+        if isinstance(tool_call, MiouMiouMiouCallMessage) and event.data is not None:
+            await tool_call.handle_miou_miou_miou_event(event.data)
         else:
             tool_call.set_stream_message(event.message)
 

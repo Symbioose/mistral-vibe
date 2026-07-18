@@ -23,17 +23,17 @@ from vibe.cli.textual_ui.widgets.diff_rendering import (
 )
 from vibe.cli.textual_ui.widgets.links import LinkStatic, link_content
 from vibe.cli.textual_ui.widgets.no_markup_static import NoMarkupStatic
+from vibe.core.mioumioumiou.models import MiouMiouMiouStatus
 from vibe.core.tools.builtins.ask_user_question import AskUserQuestionResult
 from vibe.core.tools.builtins.bash import BashArgs, BashResult
 from vibe.core.tools.builtins.edit import EditArgs, EditResult
 from vibe.core.tools.builtins.grep import GrepArgs, GrepResult
+from vibe.core.tools.builtins.miou_miou_miou import MiouMiouMiouArgs, MiouMiouMiouResult
 from vibe.core.tools.builtins.read_file import ReadFileArgs, ReadFileResult
 from vibe.core.tools.builtins.todo import TodoArgs, TodoResult
 from vibe.core.tools.builtins.web_fetch import WebFetchResult
 from vibe.core.tools.builtins.web_search import WebSearchResult, WebSearchSource
-from vibe.core.tools.builtins.workflow import WorkflowArgs, WorkflowResult
 from vibe.core.tools.builtins.write_file import WriteFileArgs, WriteFileResult
-from vibe.core.workflows.models import WorkflowStatus
 
 _LINE_NUMBER_PREFIX = re.compile(r"^ *\d+→")
 _PROMPT_PREVIEW_MAX_LEN = 80
@@ -430,7 +430,7 @@ class WebFetchResultWidget(ToolResultWidget[WebFetchResult]):
         yield from self._footer()
 
 
-class WorkflowApprovalWidget(ToolApprovalWidget[WorkflowArgs]):
+class MiouMiouMiouApprovalWidget(ToolApprovalWidget[MiouMiouMiouArgs]):
     def compose(self) -> ComposeResult:
         if self.args.script_path:
             yield NoMarkupStatic(
@@ -458,7 +458,7 @@ class WorkflowApprovalWidget(ToolApprovalWidget[WorkflowArgs]):
             yield Markdown(_fenced_code_block(self.args.script, "python"))
 
 
-class WorkflowResultWidget(ToolResultWidget[WorkflowResult]):
+class MiouMiouMiouResultWidget(ToolResultWidget[MiouMiouMiouResult]):
     def compose(self) -> ComposeResult:
         if not self.result:
             yield from self._footer()
@@ -472,7 +472,7 @@ class WorkflowResultWidget(ToolResultWidget[WorkflowResult]):
             yield from self._yield_truncated_text(pretty)
         hint = (
             f"run {self.result.run_id} · journal saved for resume"
-            if self.result.status is not WorkflowStatus.COMPLETED
+            if self.result.status is not MiouMiouMiouStatus.COMPLETED
             else None
         )
         yield from self._footer(hint)
@@ -485,7 +485,7 @@ APPROVAL_WIDGETS: dict[str, type[ToolApprovalWidget]] = {
     "edit": EditApprovalWidget,
     "grep": GrepApprovalWidget,
     "todo": TodoApprovalWidget,
-    "workflow": WorkflowApprovalWidget,
+    "miou_miou_miou": MiouMiouMiouApprovalWidget,
 }
 
 RESULT_WIDGETS: dict[str, type[ToolResultWidget]] = {
@@ -498,7 +498,7 @@ RESULT_WIDGETS: dict[str, type[ToolResultWidget]] = {
     "ask_user_question": AskUserQuestionResultWidget,
     "web_search": WebSearchResultWidget,
     "web_fetch": WebFetchResultWidget,
-    "workflow": WorkflowResultWidget,
+    "miou_miou_miou": MiouMiouMiouResultWidget,
 }
 
 # Tools whose result message text is allowed to contain clickable URLs.

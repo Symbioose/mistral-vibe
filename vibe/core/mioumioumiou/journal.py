@@ -23,14 +23,14 @@ def journal_key(
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-class WorkflowJournal:
+class MiouMiouMiouJournal:
     def __init__(self, path: Path, replay: dict[str, deque[Any]] | None = None) -> None:
         self._path = path
         self._replay = replay or {}
         path.parent.mkdir(parents=True, exist_ok=True)
 
     @classmethod
-    def create(cls, path: Path, resume_from: Path | None = None) -> WorkflowJournal:
+    def create(cls, path: Path, resume_from: Path | None = None) -> MiouMiouMiouJournal:
         replay: dict[str, deque[Any]] = {}
         if resume_from is not None and resume_from.exists():
             for line in resume_from.read_text(encoding="utf-8").splitlines():
@@ -41,7 +41,8 @@ class WorkflowJournal:
                     entry = json.loads(line)
                 except json.JSONDecodeError:
                     logger.warning(
-                        "Skipping corrupt workflow journal line in %s", resume_from
+                        "Skipping corrupt miou_miou_miou journal line in %s",
+                        resume_from,
                     )
                     continue
                 replay.setdefault(entry["key"], deque()).append(entry["result"])

@@ -796,47 +796,47 @@ StatusMessage {
     }
 }
 
-.workflow-tree {
+.miou_miou_miou-tree {
     width: 100%;
     height: auto;
     padding: 0 0 0 2;
 }
 
-.workflow-phase {
+.miou_miou_miou-phase {
     width: 100%;
     height: auto;
 }
 
-.workflow-phase-header {
+.miou_miou_miou-phase-header {
     width: 100%;
     height: auto;
     color: $primary;
     margin-top: 0;
 }
 
-.workflow-phase-rows {
+.miou_miou_miou-phase-rows {
     width: 100%;
     height: auto;
     padding: 0 0 0 2;
 }
 
-.workflow-agent-row {
+.miou_miou_miou-agent-row {
     width: 100%;
     height: auto;
 }
 
-.workflow-agent-header {
+.miou_miou_miou-agent-header {
     width: 100%;
     height: auto;
 }
 
-.workflow-agent-activity {
+.miou_miou_miou-agent-activity {
     width: 100%;
     height: auto;
     padding: 0 0 0 2;
 }
 
-.workflow-activity-line {
+.miou_miou_miou-activity-line {
     width: 100%;
     height: auto;
     color: $text-muted;
@@ -846,13 +846,13 @@ StatusMessage {
     }
 }
 
-.workflow-logs {
+.miou_miou_miou-logs {
     width: 100%;
     height: auto;
     padding: 0 0 0 2;
 }
 
-.workflow-log-line {
+.miou_miou_miou-log-line {
     width: 100%;
     height: auto;
     color: $text-muted;
@@ -862,12 +862,12 @@ StatusMessage {
     }
 }
 
-WorkflowInspectorScreen {
+MiouMiouMiouInspectorScreen {
     align: center middle;
     background: $background 60%;
 }
 
-#workflow-inspector {
+#miou_miou_miou-inspector {
     width: 90%;
     height: 80%;
     background: $surface;
@@ -875,51 +875,51 @@ WorkflowInspectorScreen {
     padding: 1 2;
 }
 
-#workflow-inspector-title {
+#miou_miou_miou-inspector-title {
     width: 100%;
     height: auto;
     color: $text-muted;
     margin-bottom: 1;
 }
 
-#workflow-inspector-body {
+#miou_miou_miou-inspector-body {
     width: 100%;
     height: 1fr;
 }
 
-#workflow-inspector-tree {
+#miou_miou_miou-inspector-tree {
     width: 40%;
     height: 100%;
     border-right: solid $panel;
     padding-right: 1;
 }
 
-#workflow-inspector-detail {
+#miou_miou_miou-inspector-detail {
     width: 60%;
     height: 100%;
     padding: 0 0 0 2;
 }
 
-.workflow-inspector-header {
+.miou_miou_miou-inspector-header {
     width: 100%;
     height: auto;
     margin-bottom: 1;
 }
 
-.workflow-inspector-section {
+.miou_miou_miou-inspector-section {
     width: 100%;
     height: auto;
     color: $primary;
     margin: 1 0 0 0;
 }
 
-.workflow-inspector-body-text {
+.miou_miou_miou-inspector-body-text {
     width: 100%;
     height: auto;
     color: $foreground;
 }
 
-.workflow-call:hover .status-indicator-text {
+.miou_miou_miou-call:hover .status-indicator-text {
     text-style: underline;
 }
 

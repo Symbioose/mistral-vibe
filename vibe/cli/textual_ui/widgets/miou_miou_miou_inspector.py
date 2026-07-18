@@ -9,9 +9,12 @@ from textual.screen import ModalScreen
 from textual.widgets import Static, Tree
 from textual.widgets.tree import TreeNode
 
+from vibe.cli.textual_ui.widgets.miou_miou_miou import (
+    MiouMiouMiouAgentRow,
+    MiouMiouMiouCallMessage,
+)
 from vibe.cli.textual_ui.widgets.no_markup_static import NoMarkupStatic
 from vibe.cli.textual_ui.widgets.status_message import IndicatorState
-from vibe.cli.textual_ui.widgets.workflow import WorkflowAgentRow, WorkflowCallMessage
 
 _SYNC_INTERVAL_S = 0.5
 
@@ -22,7 +25,7 @@ _STATE_GLYPHS = {
 }
 
 
-class WorkflowInspectorScreen(ModalScreen[None]):
+class MiouMiouMiouInspectorScreen(ModalScreen[None]):
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "dismiss_inspector", "Close", priority=True),
         Binding("q", "dismiss_inspector", "Close", show=False),
@@ -31,10 +34,10 @@ class WorkflowInspectorScreen(ModalScreen[None]):
     ]
 
     def __init__(
-        self, workflow: WorkflowCallMessage, initial_agent: int | None = None
+        self, miou_miou_miou: MiouMiouMiouCallMessage, initial_agent: int | None = None
     ) -> None:
         super().__init__()
-        self._workflow = workflow
+        self._miou_miou_miou = miou_miou_miou
         self._initial_agent = initial_agent
         self._follow = initial_agent is None
         self._tree: Tree[int] | None = None
@@ -48,15 +51,15 @@ class WorkflowInspectorScreen(ModalScreen[None]):
         self._expected_selection: int | None = None
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="workflow-inspector"):
-            self._title = NoMarkupStatic("", id="workflow-inspector-title")
+        with Vertical(id="miou_miou_miou-inspector"):
+            self._title = NoMarkupStatic("", id="miou_miou_miou-inspector-title")
             yield self._title
-            with Horizontal(id="workflow-inspector-body"):
-                self._tree = Tree("workflow", id="workflow-inspector-tree")
+            with Horizontal(id="miou_miou_miou-inspector-body"):
+                self._tree = Tree("miou_miou_miou", id="miou_miou_miou-inspector-tree")
                 self._tree.show_root = False
                 self._tree.guide_depth = 2
                 yield self._tree
-                self._detail = VerticalScroll(id="workflow-inspector-detail")
+                self._detail = VerticalScroll(id="miou_miou_miou-inspector-detail")
                 yield self._detail
 
     def on_mount(self) -> None:
@@ -91,42 +94,46 @@ class WorkflowInspectorScreen(ModalScreen[None]):
             self._refresh_detail()
         self._tree.select_node(node)
 
-    def _row_glyph(self, row: WorkflowAgentRow) -> str:
+    def _row_glyph(self, row: MiouMiouMiouAgentRow) -> str:
         if not row.finished:
             return "◐"
         return _STATE_GLYPHS.get(row.indicator_state, "·")
 
-    def _node_label(self, row: WorkflowAgentRow) -> str:
+    def _node_label(self, row: MiouMiouMiouAgentRow) -> str:
         return f"{self._row_glyph(row)} {row.get_content().lstrip('▸ ')}"
 
     def _phase_label(self, phase: str | None) -> str:
         title = phase if phase is not None else "(no phase)"
-        rows = [r for r in self._workflow.agent_rows.values() if r.phase_title == phase]
+        rows = [
+            r
+            for r in self._miou_miou_miou.agent_rows.values()
+            if r.phase_title == phase
+        ]
         done = sum(r.finished for r in rows)
         return f"◆ {title} — {done}/{len(rows)}"
 
     def _update_title(self) -> None:
         if self._title is None:
             return
-        rows = self._workflow.agent_rows
+        rows = self._miou_miou_miou.agent_rows
         done = sum(r.finished for r in rows.values())
         follow = "on" if self._follow else "off"
         self._title.update(
-            f"Workflow inspector — {done}/{len(rows)} agents · "
+            f"MiouMiouMiou inspector — {done}/{len(rows)} agents · "
             f"↑/↓ navigate · f follow: {follow} · esc close"
         )
 
     def _sync(self) -> None:
         if self._tree is None:
             return
-        for phase in self._workflow.phase_order:
+        for phase in self._miou_miou_miou.phase_order:
             if phase not in self._phase_nodes:
                 self._phase_nodes[phase] = self._tree.root.add(
                     self._phase_label(phase), expand=True
                 )
         for phase, node in self._phase_nodes.items():
             node.set_label(self._phase_label(phase))
-        for agent_id, row in self._workflow.agent_rows.items():
+        for agent_id, row in self._miou_miou_miou.agent_rows.items():
             node = self._agent_nodes.get(agent_id)
             if node is None:
                 parent = self._phase_nodes.get(row.phase_title)
@@ -147,7 +154,7 @@ class WorkflowInspectorScreen(ModalScreen[None]):
     def _follow_latest(self) -> None:
         running = [
             agent_id
-            for agent_id, row in self._workflow.agent_rows.items()
+            for agent_id, row in self._miou_miou_miou.agent_rows.items()
             if not row.finished
         ]
         target_id = max(running) if running else max(self._agent_nodes, default=None)
@@ -172,7 +179,7 @@ class WorkflowInspectorScreen(ModalScreen[None]):
     def _refresh_detail(self) -> None:
         if self._detail is None or self._selected_agent is None:
             return
-        row = self._workflow.agent_rows.get(self._selected_agent)
+        row = self._miou_miou_miou.agent_rows.get(self._selected_agent)
         if row is None:
             return
         unchanged = (
@@ -187,7 +194,7 @@ class WorkflowInspectorScreen(ModalScreen[None]):
         header = f"{self._row_glyph(row)} {row.get_content().lstrip('▸ ')}"
         if row.status_detail:
             header += f"\n{row.status_detail}"
-        self._detail.mount(Static(header, classes="workflow-inspector-header"))
+        self._detail.mount(Static(header, classes="miou_miou_miou-inspector-header"))
         self._mount_section("prompt", row.prompt or "(prompt unavailable)")
         activity = (
             "\n".join(row.activity_log) if row.activity_log else "(no activity yet)"
@@ -200,6 +207,8 @@ class WorkflowInspectorScreen(ModalScreen[None]):
         if self._detail is None:
             return
         self._detail.mount(
-            NoMarkupStatic(f"── {title} ──", classes="workflow-inspector-section")
+            NoMarkupStatic(f"── {title} ──", classes="miou_miou_miou-inspector-section")
         )
-        self._detail.mount(NoMarkupStatic(body, classes="workflow-inspector-body-text"))
+        self._detail.mount(
+            NoMarkupStatic(body, classes="miou_miou_miou-inspector-body-text")
+        )

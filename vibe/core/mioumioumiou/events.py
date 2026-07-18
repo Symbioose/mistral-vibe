@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
-from vibe.core.workflows.models import AgentRunStatus, WorkflowStatus
+from vibe.core.mioumioumiou.models import AgentRunStatus, MiouMiouMiouStatus
 
 
 class PhaseStartedEvent(BaseModel):
@@ -38,26 +38,26 @@ class AgentFinishedEvent(BaseModel):
     output: str | None = None
 
 
-class WorkflowLogEvent(BaseModel):
+class MiouMiouMiouLogEvent(BaseModel):
     kind: Literal["log"] = "log"
     message: str
 
 
-class WorkflowFinishedEvent(BaseModel):
-    kind: Literal["workflow_finished"] = "workflow_finished"
-    status: WorkflowStatus
+class MiouMiouMiouFinishedEvent(BaseModel):
+    kind: Literal["miou_miou_miou_finished"] = "miou_miou_miou_finished"
+    status: MiouMiouMiouStatus
     agents_spawned: int
     agents_cached: int
     duration_s: float
     error: str | None = None
 
 
-WorkflowEvent = Annotated[
+MiouMiouMiouEvent = Annotated[
     PhaseStartedEvent
     | AgentStartedEvent
     | AgentProgressEvent
     | AgentFinishedEvent
-    | WorkflowLogEvent
-    | WorkflowFinishedEvent,
+    | MiouMiouMiouLogEvent
+    | MiouMiouMiouFinishedEvent,
     Field(discriminator="kind"),
 ]

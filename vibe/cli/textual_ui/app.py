@@ -280,7 +280,7 @@ if TYPE_CHECKING:
     from vibe.cli.textual_ui.widgets.connector_auth_app import ConnectorAuthApp
     from vibe.cli.textual_ui.widgets.mcp_app import MCPApp
     from vibe.cli.textual_ui.widgets.mcp_oauth_app import MCPOAuthApp
-    from vibe.cli.textual_ui.widgets.workflow import WorkflowCallMessage
+    from vibe.cli.textual_ui.widgets.miou_miou_miou import MiouMiouMiouCallMessage
     from vibe.core.agent_loop import AgentLoop
 
 
@@ -484,7 +484,9 @@ class VibeApp(App):  # noqa: PLR0904
             "ctrl+g", "open_plan_in_editor", "Edit Plan", show=False, priority=False
         ),
         Binding("ctrl+backslash", "toggle_debug_console", "Debug Console", show=False),
-        Binding("ctrl+w", "workflow_inspector", "Workflow Inspector", show=False),
+        Binding(
+            "ctrl+w", "miou_miou_miou_inspector", "MiouMiouMiou Inspector", show=False
+        ),
     ]
 
     def get_driver_class(self) -> type[Driver]:
@@ -4044,41 +4046,43 @@ class VibeApp(App):  # noqa: PLR0904
         return interrupted
 
     def action_interrupt(self) -> None:
-        from vibe.cli.textual_ui.widgets.workflow_inspector import (
-            WorkflowInspectorScreen,
+        from vibe.cli.textual_ui.widgets.miou_miou_miou_inspector import (
+            MiouMiouMiouInspectorScreen,
         )
 
-        if isinstance(self.screen, WorkflowInspectorScreen):
+        if isinstance(self.screen, MiouMiouMiouInspectorScreen):
             self.screen.action_dismiss_inspector()
             return
         self._try_interrupt()
 
-    def action_workflow_inspector(self) -> None:
-        from vibe.cli.textual_ui.widgets.workflow import WorkflowCallMessage
-        from vibe.cli.textual_ui.widgets.workflow_inspector import (
-            WorkflowInspectorScreen,
+    def action_miou_miou_miou_inspector(self) -> None:
+        from vibe.cli.textual_ui.widgets.miou_miou_miou import MiouMiouMiouCallMessage
+        from vibe.cli.textual_ui.widgets.miou_miou_miou_inspector import (
+            MiouMiouMiouInspectorScreen,
         )
 
-        if isinstance(self.screen, WorkflowInspectorScreen):
+        if isinstance(self.screen, MiouMiouMiouInspectorScreen):
             self.screen.action_dismiss_inspector()
             return
-        candidates = [w for w in WorkflowCallMessage.instances if w.is_attached]
+        candidates = [w for w in MiouMiouMiouCallMessage.instances if w.is_attached]
         if not candidates:
-            self.notify("No workflow in this session yet", severity="information")
+            self.notify("No miou_miou_miou in this session yet", severity="information")
             return
-        self.push_screen(WorkflowInspectorScreen(candidates[-1]))
+        self.push_screen(MiouMiouMiouInspectorScreen(candidates[-1]))
 
-    def on_workflow_call_message_inspect_requested(
-        self, message: WorkflowCallMessage.InspectRequested
+    def on_miou_miou_miou_call_message_inspect_requested(
+        self, message: MiouMiouMiouCallMessage.InspectRequested
     ) -> None:
-        from vibe.cli.textual_ui.widgets.workflow_inspector import (
-            WorkflowInspectorScreen,
+        from vibe.cli.textual_ui.widgets.miou_miou_miou_inspector import (
+            MiouMiouMiouInspectorScreen,
         )
 
-        if isinstance(self.screen, WorkflowInspectorScreen):
+        if isinstance(self.screen, MiouMiouMiouInspectorScreen):
             return
         self.push_screen(
-            WorkflowInspectorScreen(message.workflow, initial_agent=message.agent_id)
+            MiouMiouMiouInspectorScreen(
+                message.miou_miou_miou, initial_agent=message.agent_id
+            )
         )
 
     async def on_history_load_more_requested(self, _: HistoryLoadMoreRequested) -> None:

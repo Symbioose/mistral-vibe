@@ -5,12 +5,13 @@ import re
 from typing import Any
 
 import jsonschema
+from jsonschema.validators import validator_for
 
 _FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
 
 def check_schema_valid(schema: dict[str, Any]) -> str | None:
-    validator = jsonschema.validators.validator_for(schema)
+    validator = validator_for(schema)
     try:
         validator.check_schema(schema)
     except jsonschema.SchemaError as e:

@@ -1,10 +1,10 @@
-Execute a workflow script that orchestrates multiple subagents deterministically.
+Execute a miou_miou_miou script that orchestrates multiple subagents deterministically.
 
-A workflow structures work across many agents — to be comprehensive (decompose and cover in parallel), to be confident (independent perspectives and adversarial checks before committing), or to take on scale one context can't hold (migrations, audits, broad sweeps). The script encodes that structure: what fans out, what verifies, what synthesizes.
+A miou_miou_miou structures work across many agents — to be comprehensive (decompose and cover in parallel), to be confident (independent perspectives and adversarial checks before committing), or to take on scale one context can't hold (migrations, audits, broad sweeps). The script encodes that structure: what fans out, what verifies, what synthesizes.
 
 ## When to reach for this tool — decide yourself, don't wait for instructions
 
-The user will NOT say "use a workflow" or spell out phases. They will say things like
+The user will NOT say "use a miou_miou_miou" or spell out phases. They will say things like
 "audite ce repo", "trouve tous les bugs", "comprends cette codebase", "vérifie que
 tout est cohérent", "compare ces approches", "migre tous les usages de X". YOUR job
 is to recognize that the ask is broad, deep, or repetitive, and to design the
@@ -20,10 +20,10 @@ decomposition yourself:
 - Repetitive transformation ("do X for every Y") → enumerate the Ys first (one
   scout agent or a cheap deterministic pass), then pipeline over them.
 
-Default to MORE structure, not less: a real workflow has 2–4 phases (scout →
+Default to MORE structure, not less: a real miou_miou_miou has 2–4 phases (scout →
 fan-out → verify → synthesize), tens of agents when the target is large, and
 explicit verification before reporting. A single agent() call wrapped in a
-workflow is a waste — use the `task` tool for that. Prompts you give each agent
+miou_miou_miou is a waste — use the `task` tool for that. Prompts you give each agent
 must be self-contained briefs: context, exact question, expected output shape —
 the agent knows nothing except what you write.
 
@@ -44,7 +44,7 @@ meta = {
 phase("Scan")
 flaky = await agent("grep CI logs for retry markers", schema=FLAKY_SCHEMA)
 ...
-return final_value   # top-level return = what the workflow returns
+return final_value   # top-level return = what the miou_miou_miou returns
 ```
 
 Required meta fields: `name`, `description`. Optional: `phases`. Use the SAME phase titles in `meta["phases"]` as in `phase()` calls — titles are matched exactly.
@@ -56,8 +56,8 @@ Required meta fields: `name`, `description`. Optional: `phases`. Use the SAME ph
 - `await pipeline(items, *stages)` — run each item through all stages independently, NO barrier between stages: item A can be in stage 3 while item B is still in stage 1. Each stage callable receives `(prev_result, original_item, index)` — extra trailing parameters are optional. A stage that raises drops that item to `None` and skips its remaining stages.
 - `phase(title)` — start a new phase; subsequent `agent()` calls are grouped under this title in the progress display.
 - `log(message)` — emit a progress line to the user.
-- `return value` — a top-level return ends the script and sets the workflow's return value (JSON-serializable). `result(value)` exists as an alias but prefer `return`.
-- `args` — the value passed as the tool's `args` input, verbatim (`None` if not provided). Use it to parameterize workflows instead of hardcoding.
+- `return value` — a top-level return ends the script and sets the miou_miou_miou's return value (JSON-serializable). `result(value)` exists as an alias but prefer `return`.
+- `args` — the value passed as the tool's `args` input, verbatim (`None` if not provided). Use it to parameterize mioumioumiou instead of hardcoding.
 - `prompts` — dict of the tool's `prompts` input. THIS IS WHERE AGENT PROMPTS LIVE: pass every multi-line or prose-heavy agent brief in the `prompts` tool argument (JSON handles quoting/newlines safely) and reference it as `prompts["key"]`, optionally composing per-item context: `agent(prompts["review"] + "\n\nFile: " + path)`. Embedding long prose directly in Python strings is the #1 cause of syntax errors — keep the script mechanical, keep the prose in JSON.
 
 RESERVED NAMES: `agent`, `parallel`, `pipeline`, `phase`, `log`, `result`, `args` are primitives — the script is REJECTED at parse time if any of them is used as a variable, parameter, or function name (e.g. `for result in ...` is invalid; use `for verdict in ...`).
@@ -71,10 +71,10 @@ Subagents are told their final text IS the return value (not a human-facing mess
 ## Rules
 
 - DEFAULT TO `pipeline()`. Only use a barrier (`parallel` between stages) when stage N genuinely needs cross-item context from ALL of stage N-1 (dedup/merge across the full set, early-exit on zero findings, prompts that reference "the other findings"). "I need to flatten/filter first" is NOT a reason — do it inside a pipeline stage.
-- Concurrent `agent()` calls are capped per workflow — excess calls queue and run as slots free up. You can pass 100 items; they all complete. Total agent count per workflow is capped at 1000; a single `parallel()`/`pipeline()` call accepts at most 4096 items.
+- Concurrent `agent()` calls are capped per miou_miou_miou — excess calls queue and run as slots free up. You can pass 100 items; they all complete. Total agent count per miou_miou_miou is capped at 1000; a single `parallel()`/`pipeline()` call accepts at most 4096 items.
 - `time.time()`, `datetime.now()`, `random`, filesystem and network access are unavailable inside scripts (they would break resume) — pass timestamps and randomness in via `args`; subagents do the real-world work.
-- If a workflow bounds coverage (top-N, sampling), `log()` what was dropped — silent truncation reads as "covered everything" when it didn't.
-- Each agent's inner tool activity already streams live to the user — use `log()` for workflow-level milestones (phase transitions, counts, decisions), not to narrate individual agents.
+- If a miou_miou_miou bounds coverage (top-N, sampling), `log()` what was dropped — silent truncation reads as "covered everything" when it didn't.
+- Each agent's inner tool activity already streams live to the user — use `log()` for miou_miou_miou-level milestones (phase transitions, counts, decisions), not to narrate individual agents.
 - NEVER index into an agent's result (`out["key"]`, `out[0]`) unless that call used `schema=` — without a schema the result is free text. And ALWAYS guard for `None` before indexing: failed agents return `None` (`[o for o in outs if o]`).
 
 ## Patterns

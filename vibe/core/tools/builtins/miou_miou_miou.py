@@ -14,6 +14,23 @@ from pydantic import BaseModel, Field
 from vibe.core.agents.models import AgentType, BuiltinAgentName
 from vibe.core.config import SessionLoggingConfig, VibeConfig
 from vibe.core.logger import logger
+from vibe.core.mioumioumiou.errors import MiouMiouMiouScriptError
+from vibe.core.mioumioumiou.events import (
+    AgentFinishedEvent,
+    AgentStartedEvent,
+    MiouMiouMiouEvent,
+    MiouMiouMiouLogEvent,
+    PhaseStartedEvent,
+)
+from vibe.core.mioumioumiou.journal import MiouMiouMiouJournal
+from vibe.core.mioumioumiou.models import (
+    AgentRunStatus,
+    MiouMiouMiouStatus,
+    SubagentOutcome,
+    SubagentRequest,
+)
+from vibe.core.mioumioumiou.runtime import MiouMiouMiouRuntime
+from vibe.core.mioumioumiou.script import parse_miou_miou_miou_script
 from vibe.core.tools.base import (
     BaseTool,
     BaseToolConfig,
@@ -35,42 +52,25 @@ from vibe.core.types import (
     ToolResultEvent,
     ToolStreamEvent,
 )
-from vibe.core.workflows.errors import WorkflowScriptError
-from vibe.core.workflows.events import (
-    AgentFinishedEvent,
-    AgentStartedEvent,
-    PhaseStartedEvent,
-    WorkflowEvent,
-    WorkflowLogEvent,
-)
-from vibe.core.workflows.journal import WorkflowJournal
-from vibe.core.workflows.models import (
-    AgentRunStatus,
-    SubagentOutcome,
-    SubagentRequest,
-    WorkflowStatus,
-)
-from vibe.core.workflows.runtime import WorkflowRuntime
-from vibe.core.workflows.script import parse_workflow_script
 
 if TYPE_CHECKING:
     from vibe.core.agent_loop import AgentLoop
 
 _MAX_RESULT_CHARS = 40_000
 _SUBAGENT_PREAMBLE = (
-    "You are a subagent inside a deterministic workflow. Your final message IS "
-    "the workflow's data — it is consumed by a script, not read by a human. "
+    "You are a subagent inside a deterministic miou_miou_miou. Your final message IS "
+    "the miou_miou_miou's data — it is consumed by a script, not read by a human. "
     "Return raw findings/data only: no preamble, no summary of what you did, "
     "no offers to help further.\n\n"
 )
 
 
-class WorkflowArgs(BaseModel):
+class MiouMiouMiouArgs(BaseModel):
     script: str | None = Field(
         default=None,
         max_length=10_000,
         description=(
-            "Self-contained async Python workflow script starting with a "
+            "Self-contained async Python miou_miou_miou script starting with a "
             "`meta = {...}` literal. Hard limit 10000 chars / 200 lines: keep it "
             "short mechanical code — every prose agent brief goes in `prompts`, "
             'referenced as prompts["key"]'
@@ -78,7 +78,7 @@ class WorkflowArgs(BaseModel):
     )
     script_path: str | None = Field(
         default=None,
-        description="Path to a workflow script file on disk; takes precedence over `script`",
+        description="Path to a miou_miou_miou script file on disk; takes precedence over `script`",
     )
     args: Any = Field(
         default=None,
@@ -90,14 +90,14 @@ class WorkflowArgs(BaseModel):
     )
     resume_from_run_id: str | None = Field(
         default=None,
-        description="Run ID of a prior workflow invocation to resume from; successful agent() calls with unchanged (prompt, opts) replay instantly",
+        description="Run ID of a prior miou_miou_miou invocation to resume from; successful agent() calls with unchanged (prompt, opts) replay instantly",
     )
 
 
-class WorkflowResult(BaseModel):
+class MiouMiouMiouResult(BaseModel):
     run_id: str
     name: str
-    status: WorkflowStatus
+    status: MiouMiouMiouStatus
     result: Any = None
     error: str | None = None
     agents_spawned: int = 0
@@ -105,7 +105,7 @@ class WorkflowResult(BaseModel):
     duration_s: float = 0.0
 
 
-class WorkflowToolConfig(BaseToolConfig):
+class MiouMiouMiouToolConfig(BaseToolConfig):
     permission: ToolPermission = ToolPermission.ASK
     default_agent: str = BuiltinAgentName.EXPLORE
     max_concurrency: int | None = None
@@ -114,7 +114,7 @@ class WorkflowToolConfig(BaseToolConfig):
 
 
 class _AgentLoopSpawner:
-    def __init__(self, ctx: InvokeContext, config: WorkflowToolConfig) -> None:
+    def __init__(self, ctx: InvokeContext, config: MiouMiouMiouToolConfig) -> None:
         self._ctx = ctx
         self._config = config
 
@@ -129,7 +129,7 @@ class _AgentLoopSpawner:
         ctx = self._ctx
         if not ctx.agent_manager:
             return SubagentOutcome(
-                success=False, error="workflow requires agent_manager in context"
+                success=False, error="miou_miou_miou requires agent_manager in context"
             )
         try:
             profile = ctx.agent_manager.get_agent(agent_name)
@@ -138,12 +138,12 @@ class _AgentLoopSpawner:
         if profile.agent_type != AgentType.SUBAGENT:
             return SubagentOutcome(
                 success=False,
-                error=f"agent '{agent_name}' is not a subagent; only subagents can run inside workflows",
+                error=f"agent '{agent_name}' is not a subagent; only subagents can run inside mioumioumiou",
             )
 
         session_logging = SessionLoggingConfig(
             save_dir=str(ctx.session_dir / "agents") if ctx.session_dir else "",
-            session_prefix=f"workflow-{agent_name}",
+            session_prefix=f"miou_miou_miou-{agent_name}",
             enabled=ctx.session_dir is not None,
         )
         load_overrides: dict[str, Any] = {"session_logging": session_logging}
@@ -161,7 +161,7 @@ class _AgentLoopSpawner:
                 hook_config_result=ctx.hook_config_result,
             )
         except Exception as e:
-            logger.warning("Workflow subagent '%s' setup failed: %s", agent_name, e)
+            logger.warning("MiouMiouMiou subagent '%s' setup failed: %s", agent_name, e)
             return SubagentOutcome(success=False, error=f"subagent setup failed: {e}")
         if ctx.session_id:
             loop.parent_session_id = ctx.session_id
@@ -208,7 +208,7 @@ class _AgentLoopSpawner:
         except asyncio.CancelledError:
             raise
         except Exception as e:
-            logger.warning("Workflow subagent '%s' failed: %s", agent_name, e)
+            logger.warning("MiouMiouMiou subagent '%s' failed: %s", agent_name, e)
             return SubagentOutcome(success=False, error=str(e), turns_used=turns_used)
         finally:
             with suppress(Exception):
@@ -219,62 +219,64 @@ class _AgentLoopSpawner:
         )
 
 
-class Workflow(
-    BaseTool[WorkflowArgs, WorkflowResult, WorkflowToolConfig, BaseToolState],
-    ToolUIData[WorkflowArgs, WorkflowResult],
+class MiouMiouMiou(
+    BaseTool[
+        MiouMiouMiouArgs, MiouMiouMiouResult, MiouMiouMiouToolConfig, BaseToolState
+    ],
+    ToolUIData[MiouMiouMiouArgs, MiouMiouMiouResult],
 ):
     @classmethod
     def get_call_display(cls, event: ToolCallEvent) -> ToolCallDisplay:
         args = event.args
-        if isinstance(args, WorkflowArgs) and args.script:
-            with suppress(WorkflowScriptError):
-                meta = parse_workflow_script(args.script).meta
+        if isinstance(args, MiouMiouMiouArgs) and args.script:
+            with suppress(MiouMiouMiouScriptError):
+                meta = parse_miou_miou_miou_script(args.script).meta
                 return ToolCallDisplay(
-                    summary=f"Workflow {meta.name}: {meta.description}"
+                    summary=f"MiouMiouMiou {meta.name}: {meta.description}"
                 )
-        return ToolCallDisplay(summary="Running workflow")
+        return ToolCallDisplay(summary="Running miou_miou_miou")
 
     @classmethod
     def get_result_display(cls, event: ToolResultEvent) -> ToolResultDisplay:
         result = event.result
-        if isinstance(result, WorkflowResult):
+        if isinstance(result, MiouMiouMiouResult):
             agents = f"{result.agents_spawned} agent{'s' if result.agents_spawned != 1 else ''}"
             cached = f" ({result.agents_cached} cached)" if result.agents_cached else ""
             match result.status:
-                case WorkflowStatus.COMPLETED:
+                case MiouMiouMiouStatus.COMPLETED:
                     return ToolResultDisplay(
                         success=True,
-                        message=f"Workflow {result.name} completed — {agents}{cached} in {result.duration_s:.0f}s",
+                        message=f"MiouMiouMiou {result.name} completed — {agents}{cached} in {result.duration_s:.0f}s",
                     )
-                case WorkflowStatus.CANCELLED:
+                case MiouMiouMiouStatus.CANCELLED:
                     return ToolResultDisplay(
                         success=False,
-                        message=f"Workflow {result.name} cancelled after {agents}",
+                        message=f"MiouMiouMiou {result.name} cancelled after {agents}",
                     )
-                case WorkflowStatus.FAILED:
+                case MiouMiouMiouStatus.FAILED:
                     return ToolResultDisplay(
                         success=False,
-                        message=f"Workflow {result.name} failed: {result.error}",
+                        message=f"MiouMiouMiou {result.name} failed: {result.error}",
                     )
-        return ToolResultDisplay(success=True, message="Workflow finished")
+        return ToolResultDisplay(success=True, message="MiouMiouMiou finished")
 
     @classmethod
     def get_status_text(cls) -> str:
-        return "Running workflow"
+        return "Running miou_miou_miou"
 
     async def run(
-        self, args: WorkflowArgs, ctx: InvokeContext | None = None
-    ) -> AsyncGenerator[ToolStreamEvent | WorkflowResult, None]:
+        self, args: MiouMiouMiouArgs, ctx: InvokeContext | None = None
+    ) -> AsyncGenerator[ToolStreamEvent | MiouMiouMiouResult, None]:
         if not ctx:
-            raise ToolError("Workflow tool requires an invocation context")
+            raise ToolError("MiouMiouMiou tool requires an invocation context")
 
         source = self._load_source(args)
         try:
-            parsed = parse_workflow_script(source)
-        except WorkflowScriptError as e:
-            raise ToolError(f"Invalid workflow script: {e}") from e
+            parsed = parse_miou_miou_miou_script(source)
+        except MiouMiouMiouScriptError as e:
+            raise ToolError(f"Invalid miou_miou_miou script: {e}") from e
 
-        run_id = f"wf_{uuid.uuid4().hex[:12]}"
+        run_id = f"miou_{uuid.uuid4().hex[:12]}"
         run_dir = self._runs_dir(ctx) / run_id
         run_dir.mkdir(parents=True, exist_ok=True)
         (run_dir / "script.py").write_text(source, encoding="utf-8")
@@ -285,12 +287,12 @@ class Workflow(
             if not candidate.exists():
                 raise ToolError(f"No journal found for run '{args.resume_from_run_id}'")
             resume_journal = candidate
-        journal = WorkflowJournal.create(
+        journal = MiouMiouMiouJournal.create(
             run_dir / "journal.jsonl", resume_from=resume_journal
         )
 
-        queue: asyncio.Queue[WorkflowEvent | None] = asyncio.Queue()
-        runtime = WorkflowRuntime(
+        queue: asyncio.Queue[MiouMiouMiouEvent | None] = asyncio.Queue()
+        runtime = MiouMiouMiouRuntime(
             parsed,
             _AgentLoopSpawner(ctx, self.config),
             args=args.args,
@@ -327,14 +329,16 @@ class Workflow(
         try:
             outcome = run_task.result()
         except asyncio.CancelledError:
-            yield WorkflowResult(
-                run_id=run_id, name=parsed.meta.name, status=WorkflowStatus.CANCELLED
+            yield MiouMiouMiouResult(
+                run_id=run_id,
+                name=parsed.meta.name,
+                status=MiouMiouMiouStatus.CANCELLED,
             )
             return
         except Exception as e:
-            raise ToolError(f"Workflow runtime error: {e}") from e
+            raise ToolError(f"MiouMiouMiou runtime error: {e}") from e
 
-        result = WorkflowResult(
+        result = MiouMiouMiouResult(
             run_id=run_id,
             name=parsed.meta.name,
             status=outcome.status,
@@ -350,21 +354,21 @@ class Workflow(
             )
         yield result
 
-    def get_result_extra(self, result: WorkflowResult) -> str | None:
-        if result.status is WorkflowStatus.FAILED and result.error:
+    def get_result_extra(self, result: MiouMiouMiouResult) -> str | None:
+        if result.status is MiouMiouMiouStatus.FAILED and result.error:
             return (
-                "The workflow script failed. Fix the script and re-invoke with "
+                "The miou_miou_miou script failed. Fix the script and re-invoke with "
                 f'resume_from_run_id="{result.run_id}" — successful agent() calls '
                 "will replay from the journal instead of re-running."
             )
         return None
 
     @staticmethod
-    def _load_source(args: WorkflowArgs) -> str:
+    def _load_source(args: MiouMiouMiouArgs) -> str:
         if args.script_path:
             path = Path(args.script_path)
             if not path.is_file():
-                raise ToolError(f"Workflow script not found: {args.script_path}")
+                raise ToolError(f"MiouMiouMiou script not found: {args.script_path}")
             return path.read_text(encoding="utf-8")
         if args.script:
             return args.script
@@ -374,8 +378,8 @@ class Workflow(
     def _runs_dir(ctx: InvokeContext) -> Path:
         base = ctx.session_dir or ctx.scratchpad_dir
         if base is None:
-            base = Path(tempfile.gettempdir()) / "vibe-workflows"
-        return Path(base) / "workflows"
+            base = Path(tempfile.gettempdir()) / "vibe-mioumioumiou"
+        return Path(base) / "mioumioumiou"
 
 
 def _bounded_result(value: Any) -> Any:
@@ -391,7 +395,7 @@ def _bounded_result(value: Any) -> Any:
 _STATUS_VERBS = {AgentRunStatus.OK: "done", AgentRunStatus.ERROR: "failed"}
 
 
-def _humanize_event(event: WorkflowEvent) -> str | None:
+def _humanize_event(event: MiouMiouMiouEvent) -> str | None:
     match event:
         case PhaseStartedEvent(title=title):
             message = f"Phase: {title}"
@@ -404,7 +408,7 @@ def _humanize_event(event: WorkflowEvent) -> str | None:
         ):
             suffix = f" in {duration:.0f}s" if duration else ""
             message = f"{label} — {_STATUS_VERBS[status]}{suffix}"
-        case WorkflowLogEvent(message=message):
+        case MiouMiouMiouLogEvent(message=message):
             pass
         case _:
             message = None

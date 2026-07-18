@@ -15,7 +15,7 @@ from vibe.cli.textual_ui.widgets.no_markup_static import (
 )
 from vibe.cli.textual_ui.widgets.status_message import IndicatorState, StatusMessage
 from vibe.cli.textual_ui.widgets.tools import ToolCallMessage
-from vibe.core.workflows.models import AgentRunStatus
+from vibe.core.mioumioumiou.models import AgentRunStatus
 
 _MAX_LOG_LINES = 3
 _KEEP_FINISHED_ROWS_PER_PHASE = 6
@@ -25,9 +25,9 @@ _MAX_ACTIVITY_LOG = 500
 _RUNNING_ACTIVITY_TAIL = 2
 
 
-class WorkflowAgentRow(ClickWithoutDragMixin, StatusMessage):
+class MiouMiouMiouAgentRow(ClickWithoutDragMixin, StatusMessage):
     class Clicked(Message):
-        def __init__(self, row: WorkflowAgentRow) -> None:
+        def __init__(self, row: MiouMiouMiouAgentRow) -> None:
             super().__init__()
             self.row = row
 
@@ -39,7 +39,7 @@ class WorkflowAgentRow(ClickWithoutDragMixin, StatusMessage):
         self._activity: Vertical | None = None
         self._activity_count = 0
         super().__init__()
-        self.add_class("workflow-agent-row")
+        self.add_class("miou_miou_miou-agent-row")
         self.finished = False
         self.prompt = prompt
         self.phase_title = phase
@@ -48,14 +48,14 @@ class WorkflowAgentRow(ClickWithoutDragMixin, StatusMessage):
         self.activity_log: list[str] = []
 
     def compose(self) -> ComposeResult:
-        with Horizontal(classes="workflow-agent-header"):
+        with Horizontal(classes="miou_miou_miou-agent-header"):
             self._indicator_widget = NonSelectableStatic(
                 self._spinner.current_frame(), classes="status-indicator-icon"
             )
             yield self._indicator_widget
             self._text_widget = NoMarkupStatic("", classes="status-indicator-text")
             yield self._text_widget
-        self._activity = Vertical(classes="workflow-agent-activity")
+        self._activity = Vertical(classes="miou_miou_miou-agent-activity")
         self._activity.display = False
         yield self._activity
 
@@ -76,7 +76,7 @@ class WorkflowAgentRow(ClickWithoutDragMixin, StatusMessage):
         )
         if self._activity is not None:
             await self._activity.mount(
-                NoMarkupStatic(message, classes="workflow-activity-line")
+                NoMarkupStatic(message, classes="miou_miou_miou-activity-line")
             )
             self._activity_count += 1
             children = list(self._activity.children)
@@ -133,25 +133,25 @@ class WorkflowAgentRow(ClickWithoutDragMixin, StatusMessage):
         self._refresh_activity()
 
 
-class WorkflowPhaseGroup(Vertical):
+class MiouMiouMiouPhaseGroup(Vertical):
     def __init__(self, title: str | None) -> None:
         self._title = title
         self._header: NoMarkupStatic | None = None
         self._rows: Vertical | None = None
         self._pruned = 0
         super().__init__()
-        self.add_class("workflow-phase")
+        self.add_class("miou_miou_miou-phase")
 
     def compose(self) -> ComposeResult:
         if self._title is not None:
             self._header = NoMarkupStatic(
-                f"◆ {self._title}", classes="workflow-phase-header"
+                f"◆ {self._title}", classes="miou_miou_miou-phase-header"
             )
             yield self._header
-        self._rows = Vertical(classes="workflow-phase-rows")
+        self._rows = Vertical(classes="miou_miou_miou-phase-rows")
         yield self._rows
 
-    async def add_row(self, row: WorkflowAgentRow) -> None:
+    async def add_row(self, row: MiouMiouMiouAgentRow) -> None:
         if self._rows is not None:
             await self._rows.mount(row)
 
@@ -161,7 +161,7 @@ class WorkflowPhaseGroup(Vertical):
         finished = [
             child
             for child in self._rows.children
-            if isinstance(child, WorkflowAgentRow) and child.finished
+            if isinstance(child, MiouMiouMiouAgentRow) and child.finished
         ]
         overflow = len(finished) - _KEEP_FINISHED_ROWS_PER_PHASE
         if overflow <= 0:
@@ -173,38 +173,40 @@ class WorkflowPhaseGroup(Vertical):
             self._header.update(f"◆ {self._title} (+{self._pruned} earlier)")
 
 
-class WorkflowCallMessage(ToolCallMessage):
+class MiouMiouMiouCallMessage(ToolCallMessage):
     class InspectRequested(Message):
         def __init__(
-            self, workflow: WorkflowCallMessage, agent_id: int | None = None
+            self, miou_miou_miou: MiouMiouMiouCallMessage, agent_id: int | None = None
         ) -> None:
             super().__init__()
-            self.workflow = workflow
+            self.miou_miou_miou = miou_miou_miou
             self.agent_id = agent_id
 
-    instances: ClassVar[list[WorkflowCallMessage]] = []
+    instances: ClassVar[list[MiouMiouMiouCallMessage]] = []
 
     def __init__(self, event: Any = None, **kwargs: Any) -> None:
         self._tree: Vertical | None = None
         self._logs: Vertical | None = None
-        self._phases: dict[str | None, WorkflowPhaseGroup] = {}
-        self._agents: dict[int, WorkflowAgentRow] = {}
+        self._phases: dict[str | None, MiouMiouMiouPhaseGroup] = {}
+        self._agents: dict[int, MiouMiouMiouAgentRow] = {}
         self._agent_phase: dict[int, str | None] = {}
         self._agents_total = 0
         self._agents_finished = 0
         super().__init__(event, **kwargs)
-        self.add_class("workflow-call")
-        WorkflowCallMessage.instances.append(self)
+        self.add_class("miou_miou_miou-call")
+        MiouMiouMiouCallMessage.instances.append(self)
 
     @property
-    def agent_rows(self) -> dict[int, WorkflowAgentRow]:
+    def agent_rows(self) -> dict[int, MiouMiouMiouAgentRow]:
         return self._agents
 
     @property
     def phase_order(self) -> list[str | None]:
         return list(self._phases.keys())
 
-    def on_workflow_agent_row_clicked(self, message: WorkflowAgentRow.Clicked) -> None:
+    def on_miou_miou_miou_agent_row_clicked(
+        self, message: MiouMiouMiouAgentRow.Clicked
+    ) -> None:
         agent_id = next(
             (i for i, row in self._agents.items() if row is message.row), None
         )
@@ -227,9 +229,9 @@ class WorkflowCallMessage(ToolCallMessage):
                 )
                 self._suffix_widget.display = False
                 yield self._suffix_widget
-            self._tree = Vertical(classes="workflow-tree")
+            self._tree = Vertical(classes="miou_miou_miou-tree")
             yield self._tree
-            self._logs = Vertical(classes="workflow-logs")
+            self._logs = Vertical(classes="miou_miou_miou-logs")
             self._logs.display = False
             yield self._logs
             self._stream_widget = NoMarkupStatic("", classes="tool-stream-message")
@@ -250,7 +252,7 @@ class WorkflowCallMessage(ToolCallMessage):
                 row.finish(AgentRunStatus.CANCELLED)
         super().settle(state)
 
-    async def handle_workflow_event(self, data: dict[str, Any]) -> None:
+    async def handle_miou_miou_miou_event(self, data: dict[str, Any]) -> None:
         match data.get("kind"):
             case "phase_started":
                 await self._ensure_phase(data["title"])
@@ -267,10 +269,10 @@ class WorkflowCallMessage(ToolCallMessage):
             case _:
                 pass
 
-    async def _ensure_phase(self, title: str | None) -> WorkflowPhaseGroup:
+    async def _ensure_phase(self, title: str | None) -> MiouMiouMiouPhaseGroup:
         group = self._phases.get(title)
         if group is None:
-            group = WorkflowPhaseGroup(title)
+            group = MiouMiouMiouPhaseGroup(title)
             self._phases[title] = group
             if self._tree is not None:
                 await self._tree.mount(group)
@@ -280,7 +282,9 @@ class WorkflowCallMessage(ToolCallMessage):
         agent_id = data["agent_id"]
         phase = data.get("phase")
         group = await self._ensure_phase(phase)
-        row = WorkflowAgentRow(data["label"], prompt=data.get("prompt"), phase=phase)
+        row = MiouMiouMiouAgentRow(
+            data["label"], prompt=data.get("prompt"), phase=phase
+        )
         self._agents[agent_id] = row
         self._agent_phase[agent_id] = phase
         self._agents_total += 1
@@ -310,7 +314,7 @@ class WorkflowCallMessage(ToolCallMessage):
             return
         self._logs.display = True
         await self._logs.mount(
-            NoMarkupStatic(f"→ {message}", classes="workflow-log-line")
+            NoMarkupStatic(f"→ {message}", classes="miou_miou_miou-log-line")
         )
         children = list(self._logs.children)
         for extra in children[:-_MAX_LOG_LINES]:
