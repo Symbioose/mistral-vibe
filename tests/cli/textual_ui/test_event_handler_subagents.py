@@ -6,6 +6,7 @@ import pytest
 
 from tests.stubs.fake_tool import FakeTool, FakeToolArgs
 from vibe.cli.textual_ui.handlers.event_handler import EventHandler
+from vibe.cli.textual_ui.widgets.cats import KittenMessage, OrchestratorCatMessage
 from vibe.core.types import (
     AgentIdentity,
     AssistantEvent,
@@ -50,30 +51,73 @@ async def test_stamped_child_events_do_not_reach_the_transcript() -> None:
     assert handler.current_streaming_message is None
 
 
+def _started_event(call_id: str = "parent-call") -> SubagentStartedEvent:
+    return SubagentStartedEvent(
+        tool_call_id=call_id,
+        task="do work",
+        isolation="worktree",
+        branch="vibe-worker-abc",
+        agent=CHILD,
+    )
+
+
 @pytest.mark.asyncio
-async def test_subagent_started_event_streams_on_owning_task_widget() -> None:
-    handler, _ = _make_handler()
+async def test_subagent_started_event_mounts_a_kitten_under_the_task_widget() -> None:
+    handler, mount_callback = _make_handler()
     task_widget = await handler.handle_event(_task_call_event("parent-call"))
     assert task_widget is not None
-    task_widget.set_stream_message = Mock()
+
+    await handler.handle_event(_started_event())
+
+    kittens = [
+        call.args[0]
+        for call in mount_callback.await_args_list
+        if isinstance(call.args[0], KittenMessage)
+    ]
+    assert len(kittens) == 1
+    assert kittens[0].label_text() == "worker · vibe-worker-abc"
+
+
+@pytest.mark.asyncio
+async def test_first_kitten_brings_the_orchestrator_fat_cat() -> None:
+    handler, mount_callback = _make_handler()
+    await handler.handle_event(_task_call_event("call-a"))
+    await handler.handle_event(_task_call_event("call-b"))
+
+    await handler.handle_event(_started_event("call-a"))
+    await handler.handle_event(_started_event("call-b"))
+
+    fat_cats = [
+        call.args[0]
+        for call in mount_callback.await_args_list
+        if isinstance(call.args[0], OrchestratorCatMessage)
+    ]
+    assert len(fat_cats) == 1
+    assert fat_cats[0].label_text() == "orchestrator · 2 kittens dispatched"
+
+
+@pytest.mark.asyncio
+async def test_subagent_finished_event_updates_the_kitten_status() -> None:
+    handler, _ = _make_handler()
+    await handler.handle_event(_task_call_event("parent-call"))
+    await handler.handle_event(_started_event())
+    kitten = handler._kittens["parent-call"]
 
     await handler.handle_event(
-        SubagentStartedEvent(
+        SubagentFinishedEvent(
             tool_call_id="parent-call",
-            task="do work",
-            isolation="worktree",
-            branch="vibe-worker-abc",
+            status="completed",
+            merge_status="no_changes",
             agent=CHILD,
         )
     )
 
-    task_widget.set_stream_message.assert_called_once_with(
-        "worker: started on branch vibe-worker-abc"
-    )
+    assert kitten.label_text() == "worker · vibe-worker-abc · completed (no changes)"
+    assert "parent-call" not in handler._kittens
 
 
 @pytest.mark.asyncio
-async def test_subagent_finished_event_streams_status_and_merge() -> None:
+async def test_finished_without_kitten_falls_back_to_stream_message() -> None:
     handler, _ = _make_handler()
     task_widget = await handler.handle_event(_task_call_event("parent-call"))
     assert task_widget is not None
@@ -91,6 +135,18 @@ async def test_subagent_finished_event_streams_status_and_merge() -> None:
     task_widget.set_stream_message.assert_called_once_with(
         "worker: completed (no changes)"
     )
+
+
+@pytest.mark.asyncio
+async def test_stop_current_tool_call_clears_the_cats() -> None:
+    handler, _ = _make_handler()
+    await handler.handle_event(_task_call_event("parent-call"))
+    await handler.handle_event(_started_event())
+
+    handler.stop_current_tool_call(cancelled=True)
+
+    assert handler._kittens == {}
+    assert handler._orchestrator_cat is None
 
 
 @pytest.mark.asyncio
