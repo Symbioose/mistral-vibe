@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from dataclasses import dataclass
 import hashlib
 import os
@@ -149,6 +150,110 @@ def inspect_worktree_for_cleanup(worktree: PreparedWorktree) -> WorktreeCleanupS
         has_untracked_files=any(line.startswith("??") for line in status_lines),
         new_commit_count=new_commit_count,
     )
+
+
+@dataclass(frozen=True)
+class MergeReport:
+    clean: bool
+    conflicting_paths: tuple[str, ...]
+    files_changed: tuple[str, ...]
+
+
+def commit_worktree(worktree: PreparedWorktree, message: str) -> str | None:
+    """Stage and commit everything in the worktree.
+
+    Returns the commit sha, or None when the worktree is clean.
+
+    Raises:
+        WorktreeError: If the worktree cannot be opened or the commit fails.
+    """
+    try:
+        repo = Repo(worktree.root)
+        repo.git.add("-A")
+        if not repo.git.status("--porcelain").strip():
+            return None
+        repo.git.commit("-m", message)
+        return repo.head.commit.hexsha
+    except (InvalidGitRepositoryError, GitCommandError) as e:
+        raise WorktreeError(f"Failed to commit worktree {worktree.name!r}: {e}") from e
+
+
+def merge_report(repo_root: Path, branch: str) -> MergeReport:
+    """Dry-run merge of ``branch`` into the checkout at ``repo_root``.
+
+    Uses ``git merge-tree --write-tree`` so nothing in the working tree is
+    touched; conflicts are reported, never resolved.
+
+    Raises:
+        WorktreeError: If the repository cannot be inspected.
+    """
+    try:
+        repo = Repo(repo_root)
+        head = repo.head.commit.hexsha
+        merge_base = repo.git.merge_base(head, branch).strip()
+        files_changed = _changed_files(repo, merge_base, branch)
+        status, stdout, _ = repo.git.merge_tree(
+            "--write-tree",
+            "--name-only",
+            head,
+            branch,
+            with_extended_output=True,
+            with_exceptions=False,
+        )
+    except (InvalidGitRepositoryError, GitCommandError) as e:
+        raise WorktreeError(f"Failed to inspect merge of {branch!r}: {e}") from e
+
+    match status:
+        case 0:
+            return MergeReport(
+                clean=True, conflicting_paths=(), files_changed=files_changed
+            )
+        case 1:
+            return MergeReport(
+                clean=False,
+                conflicting_paths=_parse_conflicted_paths(stdout),
+                files_changed=files_changed,
+            )
+        case _:
+            raise WorktreeError(f"Failed to inspect merge of {branch!r}: {stdout}")
+
+
+def merge_branch(repo_root: Path, branch: str) -> str:
+    """Merge ``branch`` into the current checkout at ``repo_root``.
+
+    Returns the merge commit sha. On failure the merge is aborted so the
+    checkout is left pristine.
+
+    Raises:
+        WorktreeError: If the merge fails or conflicts.
+    """
+    try:
+        repo = Repo(repo_root)
+    except InvalidGitRepositoryError as e:
+        raise WorktreeError(f"Failed to merge {branch!r}: {e}") from e
+    try:
+        repo.git.merge("--no-ff", "--no-edit", branch)
+        return repo.head.commit.hexsha
+    except GitCommandError as e:
+        with suppress(GitCommandError):
+            repo.git.merge("--abort")
+        raise WorktreeError(f"Failed to merge {branch!r}: {e}") from e
+
+
+def _changed_files(repo: Repo, merge_base: str, branch: str) -> tuple[str, ...]:
+    diff = repo.git.diff("--name-only", f"{merge_base}..{branch}")
+    return tuple(line for line in diff.splitlines() if line.strip())
+
+
+def _parse_conflicted_paths(merge_tree_stdout: str) -> tuple[str, ...]:
+    # `git merge-tree --write-tree --name-only` prints the tree OID, then the
+    # conflicted file names, then a blank line and informational messages.
+    paths: list[str] = []
+    for line in merge_tree_stdout.splitlines()[1:]:
+        if not line.strip():
+            break
+        paths.append(line)
+    return tuple(paths)
 
 
 def remove_worktree(worktree: PreparedWorktree, *, delete_branch: bool = True) -> None:
