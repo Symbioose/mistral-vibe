@@ -1525,6 +1525,8 @@ class AgentLoop(AgentLoopHooksMixin):  # noqa: PLR0904
         self._pending_injected_messages.append(msg)
 
     def _handle_session_plan_events(self, event: BaseEvent) -> BaseEvent | None:
+        if event.agent is not None:
+            return None
         if isinstance(event, ToolCallEvent) and event.tool_name == "exit_plan_mode":
             self._plan_session.snapshot_content_hash()
             return PlanReviewRequestedEvent(file_path=self._plan_session.plan_file_path)

@@ -94,6 +94,7 @@ def run_programmatic(  # noqa: PLR0913, PLR0917
                         formatter.on_event(event)
                         if (
                             isinstance(event, AssistantEvent)
+                            and event.agent is None
                             and event.stopped_by_middleware
                         ):
                             raise ConversationLimitException(event.content)

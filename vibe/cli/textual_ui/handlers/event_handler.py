@@ -37,6 +37,8 @@ from vibe.core.types import (
     PlanReviewRequestedEvent,
     ReasoningEvent,
     SessionTitleUpdatedEvent,
+    SubagentFinishedEvent,
+    SubagentStartedEvent,
     ToolCallEvent,
     ToolResultEvent,
     ToolStreamEvent,
@@ -145,6 +147,9 @@ class EventHandler:
     async def handle_event(  # noqa: PLR0912
         self, event: BaseEvent, loading_widget: LoadingWidget | None = None
     ) -> ToolCallMessage | None:
+        if event.agent is not None:
+            await self._handle_subagent_event(event)
+            return None
         match event:
             case ReasoningEvent():
                 await self._handle_reasoning_message(event)
@@ -263,6 +268,30 @@ class EventHandler:
         tool_call = self.tool_calls.get(event.tool_call_id)
         if tool_call:
             tool_call.set_stream_message(event.message)
+
+    async def _handle_subagent_event(self, event: BaseEvent) -> None:
+        # Attributed child events stay off the main transcript: the task tool
+        # already streams a per-tool summary. Only lifecycle milestones are
+        # surfaced on the owning task widget.
+        if event.agent is None:
+            return
+        match event:
+            case SubagentStartedEvent():
+                message = f"{event.agent.name}: started"
+                if event.branch:
+                    message += f" on branch {event.branch}"
+                self._set_subagent_stream(event.tool_call_id, message)
+            case SubagentFinishedEvent():
+                message = f"{event.agent.name}: {event.status}"
+                if event.merge_status != "not_attempted":
+                    message += f" ({event.merge_status.replace('_', ' ')})"
+                self._set_subagent_stream(event.tool_call_id, message)
+            case _:
+                pass
+
+    def _set_subagent_stream(self, tool_call_id: str, message: str) -> None:
+        if tool_call := self.tool_calls.get(tool_call_id):
+            tool_call.set_stream_message(message)
 
     async def _handle_assistant_message(self, event: AssistantEvent) -> None:
         if self.current_streaming_reasoning is not None:
