@@ -21,6 +21,79 @@
 
 Mistral Vibe is a command-line coding assistant powered by Mistral's models. It provides a conversational interface to your codebase, allowing you to use natural language to explore, modify, and interact with your projects through a powerful set of tools.
 
+---
+
+## 🐾 Road to test — Hackathon
+
+**What we changed.** Stock Vibe already had `worker` subagents, but the main
+agent only delegated to them when you *explicitly* asked ("use workers", "in
+parallel"). Our version makes the main agent **recognize independent units of
+work and fan them out to parallel workers on its own** — one isolated git
+worktree per unit, merged back and verified — without being told to.
+
+Two capabilities to try, each in under two minutes:
+
+| Use case | What you see |
+|----------|--------------|
+| **Workers** | The agent splits a multi-part task and runs **one `worker` per part, concurrently**, each in its own git worktree, then merges the branches. |
+| **Orchestrator** | The `meow_meow_meow` tool runs a **deterministic multi-agent workflow** from a versioned script: parallel scan → adversarial verify → JSON synthesis. |
+
+### Setup (once)
+
+```bash
+git clone https://github.com/Symbioose/mistral-vibe
+cd mistral-vibe
+uv sync
+uv run vibe --setup        # enter your Mistral API key (or: export MISTRAL_API_KEY=...)
+```
+
+All commands below are run **from the repo root**, using `uv run vibe` (our
+version), not a globally installed `vibe`.
+
+### Use case 1 — Parallel workers
+
+```bash
+# Create a throwaway project: 3 stub modules + a full unittest file each
+uv run python scripts/demo_chat_corpus.py --out /tmp/demo-workers
+
+# Launch our Vibe on it (--auto-approve = no permission prompts)
+uv run vibe --workdir /tmp/demo-workers --auto-approve
+```
+
+Then paste this prompt:
+
+> Implémente les trois modules de ce projet pour que tous les tests passent.
+
+**Expected:** three `worker` agents dispatched **in a single turn**, each on its
+own `vibe-worker-*` branch, then the branches merged and
+`python -m unittest` going **green** — proof it worked, not just a claim.
+
+> Want to prove the agent decides *on its own*, with no steering file? Regenerate
+> with `--no-agents` (`... demo_chat_corpus.py --out /tmp/demo-workers --no-agents`).
+> The project then ships no `AGENTS.md`, and Vibe still fans out to workers.
+
+### Use case 2 — Orchestrator (deterministic workflow)
+
+```bash
+# Create a buggy corpus (12 files, planted logic bugs) + the canned audit workflow
+uv run python scripts/benchmark_meowmeowmeow.py --out /tmp/demo-audit --corpus-only
+
+# Launch Vibe inside the corpus
+uv run vibe --workdir /tmp/demo-audit/corpus --auto-approve
+```
+
+Then paste this prompt:
+
+> Audite ce projet et donne-moi les bugs de logique.
+
+**Expected:** Vibe lists the files, then fires the `meow_meow_meow` workflow —
+a fleet of agents **scan file batches in parallel**, each finding is
+**independently re-verified** (an adversarial pass that tries to refute it),
+and the survivors are **synthesized into a JSON bug report**. Compare the result
+against the planted ground truth in `/tmp/demo-audit/ground_truth.json`.
+
+---
+
 > [!WARNING]
 > Mistral Vibe works on Windows, but we officially support and target UNIX environments.
 
@@ -56,9 +129,12 @@ pip install mistral-vibe
 
 ## Table of Contents
 
+- [🐾 Road to test — Hackathon](#-road-to-test--hackathon)
 - [Features](#features)
   - [Built-in Agents](#built-in-agents)
   - [Subagents and Task Delegation](#subagents-and-task-delegation)
+    - [Parallel Workers](#parallel-workers)
+    - [Orchestrator (deterministic workflows)](#orchestrator-deterministic-workflows)
   - [Interactive User Questions](#interactive-user-questions)
 - [Terminal Requirements](#terminal-requirements)
 - [Quick Start](#quick-start)
@@ -98,7 +174,8 @@ pip install mistral-vibe
   - Recursively search code with `grep` (with `ripgrep` support).
   - Manage a `todo` list to track the agent's work.
   - Ask interactive questions to gather user input (`ask_user_question`).
-  - Delegate tasks to subagents for parallel work (`task`).
+  - Delegate independent units of work to parallel subagents (`task`) — the main agent fans out on its own, no need to ask.
+  - Run deterministic multi-agent workflows from a versioned script (`meow_meow_meow`).
 - **Project-Aware Context**: Vibe automatically scans your project's file structure and Git status to provide relevant context to the agent, improving its understanding of your codebase.
 - **Advanced CLI Experience**: Built with modern libraries for a smooth and efficient workflow.
   - Autocompletion for slash commands (`/`) and file paths (`@`).
@@ -158,22 +235,25 @@ Create custom subagents by adding `agent_type = "subagent"` to your agent config
 
 #### Parallel Workers
 
-The built-in `worker` subagent can *implement code*, not just explore. Each worker runs inside its own git worktree on a dedicated branch (`vibe-worker-<id>`), so several workers can edit files concurrently without ever touching your checkout or each other:
+The built-in `worker` subagent can *implement code*, not just explore. Each worker runs inside its own git worktree on a dedicated branch (`vibe-worker-<id>`), so several workers can edit files concurrently without ever touching your checkout or each other.
+
+The main agent **fans out proactively**: when a request splits into independent units of work (units that touch different files and don't depend on each other's output), it spawns one `worker` per unit in a single turn — you don't have to say "in parallel" or "use workers":
 
 ```
-> Implement the API endpoint and the CLI flag in parallel.
+> Add the /health endpoint, document the config format, and fix the lint errors.
 
-🤖 I'll fan this out to two workers.
+🤖 Three independent units — I'll run one worker each, concurrently.
 
 > task(task="Add the /health endpoint ...", agent="worker")
-> task(task="Add the --verbose flag ...", agent="worker")
+> task(task="Document the config format ...", agent="worker")
+> task(task="Fix the lint errors ...", agent="worker")
 ```
 
 Inside its worktree a worker's file edits are pre-approved; outside they are denied. When a worker finishes, its changes are committed on its branch and reported back. Configure the behavior in `config.toml`:
 
 ```toml
 [tools.task]
-allowlist = ["explore", "worker"]  # spawn workers without an approval prompt
+allowlist = ["explore", "worker"]  # both spawn without an approval prompt (default)
 max_parallel = 4                   # concurrent subagents
 merge = "manual"                   # "auto" merges conflict-free branches back;
                                    # conflicts are always reported, never resolved
@@ -181,6 +261,25 @@ keep_worktrees = "on-failure"      # "always" | "on-failure" | "never"
 ```
 
 Workers require a git repository. Custom write-capable subagents must set `isolation = "worktree"` in their profile. Note that rewind does not undo an `auto` merge — the default `manual` mode never touches your checkout.
+
+#### Orchestrator (deterministic workflows)
+
+For work with a fixed shape — audit every file, then verify each finding, then synthesize — the `meow_meow_meow` tool runs a **deterministic multi-agent workflow** defined in a small async Python script. Unlike free-form delegation, the control flow (fan-out, barriers, loops) is code, so the same run is reproducible and resumable:
+
+```python
+meta = {"name": "audit", "phases": [{"title": "Scan"}, {"title": "Verify"}]}
+
+phase("Scan")                                  # one agent per file batch, in parallel
+scans = await parallel([lambda b=b: agent(prompts["scan"] + b, schema=FINDINGS)
+                        for b in batches])
+
+phase("Verify")                                # re-check each finding adversarially
+verdicts = await parallel([lambda f=f: agent(prompts["verify"] + f, schema=VERDICT)
+                           for f in findings])
+return {"bugs": [f for f, v in zip(findings, verdicts) if v["confirmed"]]}
+```
+
+Each `agent()` call spawns a read-only subagent; `schema=` forces structured JSON output validated at the tool boundary. Runs are journalled, so a failed workflow can be resumed with `resume_from_run_id` and replay completed agents instantly instead of re-calling the model. A ready-to-run example ships in [`scripts/demo_audit.meow`](scripts/demo_audit.meow) — see [Use case 2](#use-case-2--orchestrator-deterministic-workflow) above.
 
 ### Interactive User Questions
 
