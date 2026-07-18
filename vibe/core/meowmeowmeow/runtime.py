@@ -105,6 +105,17 @@ class MeowMeowMeowRuntime:
         try:
             returned = await main()
             value = returned if returned is not None else self._result_value
+            if self._agent_total == 0:
+                status = MeowMeowMeowStatus.FAILED
+                value = None
+                error = (
+                    "the script completed without spawning a single agent — that "
+                    "is never a successful run. Usual causes: an async function "
+                    "was defined but never awaited at top level, or the fan-out "
+                    "iterated an empty list (e.g. args was not passed, or a wrong "
+                    "key like args['batches'] on a None args). Fix the script and "
+                    "re-invoke."
+                )
         except asyncio.CancelledError:
             status = MeowMeowMeowStatus.CANCELLED
             self._cancel_pending_tasks()

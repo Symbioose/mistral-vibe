@@ -279,7 +279,39 @@ def _collect_violations(tree: ast.Module) -> list[str]:
                     f"(e.g. '{shadowed}_value')"
                 )
     errors.extend(_collect_missing_awaits(tree))
+    errors.extend(_collect_sequential_awaits(tree))
     return errors
+
+
+def _collect_sequential_awaits(tree: ast.Module) -> list[str]:
+    flagged_lines: dict[int, str] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.For, ast.AsyncFor)):
+            continue
+        for child in _iter_loop_body(node):
+            match child:
+                case ast.Await(value=ast.Call(func=ast.Name(id="agent"))):
+                    flagged_lines.setdefault(
+                        child.lineno,
+                        f"'await agent(...)' inside a for-loop (script line "
+                        f"{child.lineno}) runs agents ONE BY ONE — collect thunks "
+                        "instead and run a single "
+                        "`await parallel([(lambda x=x: agent(...)) for x in items])`",
+                    )
+    return [flagged_lines[line] for line in sorted(flagged_lines)]
+
+
+def _iter_loop_body(loop: ast.For | ast.AsyncFor) -> Iterator[ast.AST]:
+    def _pruned_walk(node: ast.AST) -> Iterator[ast.AST]:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                continue
+            yield child
+            yield from _pruned_walk(child)
+
+    for stmt in loop.body + loop.orelse:
+        yield stmt
+        yield from _pruned_walk(stmt)
 
 
 def _is_meta_line(tree: ast.Module, node: ast.Constant) -> bool:
