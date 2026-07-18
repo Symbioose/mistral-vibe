@@ -1,0 +1,93 @@
+Execute a workflow script that orchestrates multiple subagents deterministically.
+
+A workflow structures work across many agents — to be comprehensive (decompose and cover in parallel), to be confident (independent perspectives and adversarial checks before committing), or to take on scale one context can't hold (migrations, audits, broad sweeps). The script encodes that structure: what fans out, what verifies, what synthesizes.
+
+Use this tool for multi-step orchestration where control flow should be deterministic (loops, conditionals, fan-out) rather than model-driven. For a single independent side-task, use the `task` tool instead.
+
+## Script format
+
+Scripts are plain **async Python** (top-level `await` is allowed; type annotations are fine). Every script must begin with a `meta` assignment — a PURE LITERAL dict (no variables, calls, or comprehensions):
+
+```python
+meta = {
+    "name": "find-flaky-tests",
+    "description": "Find flaky tests and propose fixes",   # one line, shown to the user
+    "phases": [                                            # optional, one entry per phase() call
+        {"title": "Scan", "detail": "grep test logs for retries"},
+        {"title": "Fix", "detail": "one agent per flaky test"},
+    ],
+}
+
+phase("Scan")
+flaky = await agent("grep CI logs for retry markers", schema=FLAKY_SCHEMA)
+...
+result(final_value)   # what the workflow returns
+```
+
+Required meta fields: `name`, `description`. Optional: `phases`. Use the SAME phase titles in `meta["phases"]` as in `phase()` calls — titles are matched exactly.
+
+## Script API
+
+- `await agent(prompt, *, label=None, phase=None, schema=None, agent_name=None, model=None)` — spawn a subagent. Returns its final text as a `str`. With `schema` (a JSON Schema dict), the subagent must produce JSON matching it and the call returns the parsed object — no parsing needed; validation failures are retried automatically. Returns `None` if the subagent dies on a terminal error (filter with `[r for r in results if r is not None]`). `label` overrides the display label; `phase` assigns the agent to a progress group (use it inside `pipeline()`/`parallel()` stages to avoid races on the global `phase()` state). `agent_name` selects a configured subagent profile; omit it to use the default. `model` overrides the model for this one call — default to omitting it.
+- `await parallel(thunks)` — run zero-arg callables concurrently. This is a BARRIER: awaits all before returning. A thunk that raises resolves to `None` in the result list — the call itself never raises.
+- `await pipeline(items, *stages)` — run each item through all stages independently, NO barrier between stages: item A can be in stage 3 while item B is still in stage 1. Each stage callable receives `(prev_result, original_item, index)` — extra trailing parameters are optional. A stage that raises drops that item to `None` and skips its remaining stages.
+- `phase(title)` — start a new phase; subsequent `agent()` calls are grouped under this title in the progress display.
+- `log(message)` — emit a progress line to the user.
+- `result(value)` — set the workflow's return value (JSON-serializable). May be called once; the last call wins.
+- `args` — the value passed as the tool's `args` input, verbatim (`None` if not provided). Use it to parameterize workflows instead of hardcoding.
+
+Subagents are told their final text IS the return value (not a human-facing message), so they return raw data. For structured output, use `schema` — validation happens at the call layer and the model retries on mismatch.
+
+## Rules
+
+- DEFAULT TO `pipeline()`. Only use a barrier (`parallel` between stages) when stage N genuinely needs cross-item context from ALL of stage N-1 (dedup/merge across the full set, early-exit on zero findings, prompts that reference "the other findings"). "I need to flatten/filter first" is NOT a reason — do it inside a pipeline stage.
+- Concurrent `agent()` calls are capped per workflow — excess calls queue and run as slots free up. You can pass 100 items; they all complete. Total agent count per workflow is capped at 1000; a single `parallel()`/`pipeline()` call accepts at most 4096 items.
+- `time.time()`, `datetime.now()`, `random`, filesystem and network access are unavailable inside scripts (they would break resume) — pass timestamps and randomness in via `args`; subagents do the real-world work.
+- If a workflow bounds coverage (top-N, sampling), `log()` what was dropped — silent truncation reads as "covered everything" when it didn't.
+
+## Patterns
+
+Canonical multi-stage review — pipeline by default, each dimension verifies as soon as its review completes:
+
+```python
+meta = {"name": "review-changes", "description": "Review changed files, verify findings",
+        "phases": [{"title": "Review"}, {"title": "Verify"}]}
+DIMENSIONS = [{"key": "bugs", "prompt": "..."}, {"key": "perf", "prompt": "..."}]
+
+async def verify_stage(review, item, i):
+    return await parallel([
+        (lambda f=f: agent(f"Adversarially verify: {f['title']}", label=f"verify:{f['file']}",
+                           phase="Verify", schema=VERDICT_SCHEMA))
+        for f in review["findings"]
+    ])
+
+results = await pipeline(
+    DIMENSIONS,
+    lambda d: agent(d["prompt"], label=f"review:{d['key']}", phase="Review", schema=FINDINGS_SCHEMA),
+    verify_stage,
+)
+confirmed = [f for group in results if group for f in group if f and f.get("is_real")]
+result({"confirmed": confirmed})
+```
+
+Loop-until-dry — for unknown-size discovery, keep spawning finders until 2 consecutive rounds return nothing new; dedup against everything SEEN (not just confirmed), or judge-rejected findings reappear every round:
+
+```python
+seen, confirmed, dry = set(), [], 0
+while dry < 2:
+    found = await parallel([(lambda p=p: agent(p, phase="Find", schema=BUGS)) for p in FINDER_PROMPTS])
+    fresh = [b for r in found if r for b in r["bugs"] if key(b) not in seen]
+    if not fresh:
+        dry += 1
+        continue
+    dry = 0
+    seen.update(key(b) for b in fresh)
+    votes = await parallel([(lambda b=b: agent(f"Try to refute: {b['desc']}", phase="Verify", schema=VERDICT))
+                            for b in fresh])
+    confirmed += [b for b, v in zip(fresh, votes) if v and not v["refuted"]]
+result(confirmed)
+```
+
+Quality patterns — compose freely: adversarial verify (N independent skeptics per finding, kill if the majority refute), perspective-diverse verify (distinct lenses instead of N identical refuters), judge panel (N independent attempts, parallel judges, synthesize from the winner), multi-modal sweep (parallel agents each searching a different way), completeness critic (a final agent asking "what's missing?").
+
+Scale to what the user asked for: "find any bugs" → a few finders, single-vote verify; "thoroughly audit this" → larger finder pool, 3–5 vote adversarial pass, synthesis stage.

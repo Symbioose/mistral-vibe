@@ -796,6 +796,51 @@ StatusMessage {
     }
 }
 
+.workflow-tree {
+    width: 100%;
+    height: auto;
+    padding: 0 0 0 2;
+}
+
+.workflow-phase {
+    width: 100%;
+    height: auto;
+}
+
+.workflow-phase-header {
+    width: 100%;
+    height: auto;
+    color: $primary;
+    margin-top: 0;
+}
+
+.workflow-phase-rows {
+    width: 100%;
+    height: auto;
+    padding: 0 0 0 2;
+}
+
+.workflow-agent-row {
+    width: 100%;
+    height: auto;
+}
+
+.workflow-logs {
+    width: 100%;
+    height: auto;
+    padding: 0 0 0 2;
+}
+
+.workflow-log-line {
+    width: 100%;
+    height: auto;
+    color: $text-muted;
+
+    &:ansi {
+        text-style: dim;
+    }
+}
+
 .tool-result {
     width: 100%;
     height: auto;

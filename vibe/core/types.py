@@ -510,6 +510,7 @@ class ToolStreamEvent(BaseEvent):
     tool_name: str
     message: str
     tool_call_id: str
+    data: dict[str, Any] | None = None
 
 
 class WaitingForInputEvent(BaseEvent):
