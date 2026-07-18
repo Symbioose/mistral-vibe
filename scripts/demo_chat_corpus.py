@@ -197,11 +197,15 @@ FILES = {
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True)
-    out = Path(parser.parse_args().out)
+    parser.add_argument("--no-agents", action="store_true")
+    parsed = parser.parse_args()
+    out = Path(parsed.out)
     if out.exists():
         shutil.rmtree(out, onexc=_force_remove)
     (out / "tests").mkdir(parents=True)
     for rel, content in FILES.items():
+        if parsed.no_agents and rel == "AGENTS.md":
+            continue
         (out / rel).write_text(content, encoding="utf-8", newline="\n")
 
     def git(*cmd: str) -> None:
