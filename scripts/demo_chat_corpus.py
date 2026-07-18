@@ -207,7 +207,7 @@ def main() -> None:
         shutil.rmtree(out, onexc=_force_remove)
     (out / "tests").mkdir(parents=True)
     files = dict(FILES)
-    suffixes = "bcdefghij"
+    suffixes = "bcdefghijklmnopqrstuvwxyz"
     for copy_index in range(1, max(1, parsed.copies)):
         suffix = suffixes[copy_index - 1]
         for module in ("geometry", "text_tools", "sequences"):
