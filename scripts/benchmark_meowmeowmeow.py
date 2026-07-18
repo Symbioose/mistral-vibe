@@ -408,14 +408,16 @@ async def main() -> None:
         script_ref = (out_dir / "demo_audit.meow").resolve().as_posix()
         (corpus_dir / "AGENTS.md").write_text(
             "# Regles du projet\n\n"
-            "- Tout audit ou analyse portant sur plusieurs fichiers de ce dossier "
-            "passe OBLIGATOIREMENT par le tool meow_meow_meow - ne lis jamais les "
-            "fichiers un par un dans la conversation principale.\n"
-            "- Un workflow d'audit pret a l'emploi existe pour ce projet : invoque "
-            f'meow_meow_meow avec script_path="{script_ref}" et args = la liste '
-            "JSON des chemins absolus des fichiers .py de ce dossier (liste-les "
-            "avec find d'abord). Ses prompts se chargent automatiquement.\n"
-            "- Termine toujours en presentant le JSON des bugs confirmes.\n",
+            "Pour tout audit ou analyse de ce dossier, procede EXACTEMENT ainsi, "
+            "en DEUX tool calls et rien d'autre :\n\n"
+            "1. `find . -name '*.py'` pour lister les fichiers (UN seul call).\n"
+            "2. Invoque IMMEDIATEMENT le tool meow_meow_meow avec "
+            f'script_path="{script_ref}" et args = la liste JSON des chemins '
+            "absolus obtenus. Ses prompts se chargent automatiquement.\n\n"
+            "INTERDIT avant l'invocation : lire les fichiers du corpus, lire le "
+            "script, lire quoi que ce soit d'autre, explorer les dossiers parents. "
+            "Les agents du workflow font toute la lecture. Termine en presentant "
+            "le JSON des bugs confirmes.\n",
             encoding="utf-8",
         )
         print(f"corpus written to {corpus_dir} (ground_truth.json alongside)")
