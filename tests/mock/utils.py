@@ -3,14 +3,7 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 import json
 
-from vibe.core.types import (
-    LLMChunk,
-    LLMMessage,
-    LLMUsage,
-    Role,
-    ToolCall,
-    ToolStreamEvent,
-)
+from vibe.core.types import BaseEvent, LLMChunk, LLMMessage, LLMUsage, Role, ToolCall
 
 MOCK_DATA_ENV_VAR = "VIBE_MOCK_LLM_DATA"
 
@@ -50,10 +43,10 @@ def get_mocking_env(mock_chunks: list[LLMChunk] | None = None) -> dict[str, str]
     return {MOCK_DATA_ENV_VAR: json.dumps(mock_data, ensure_ascii=False)}
 
 
-async def collect_result[T](gen: AsyncGenerator[ToolStreamEvent | T, None]) -> T:
+async def collect_result[T](gen: AsyncGenerator[BaseEvent | T, None]) -> T:
     result = None
     async for item in gen:
-        if not isinstance(item, ToolStreamEvent):
+        if not isinstance(item, BaseEvent):
             result = item
     if result is None:
         raise RuntimeError("Generator did not yield a result")
