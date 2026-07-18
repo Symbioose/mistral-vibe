@@ -68,6 +68,7 @@ class InvokeContext:
     hook_config_result: HookConfigResult | None = field(default=None)
     session_id: str | None = field(default=None)
     mcp_pool: MCPConnectionPool | None = field(default=None)
+    working_dir: Path | None = field(default=None)
 
 
 class ToolError(Exception):
@@ -153,14 +154,22 @@ class BaseTool[
     selection_priority: ClassVar[int] = 0
 
     def __init__(
-        self, config_getter: Callable[[], ToolConfig], state: ToolState
+        self,
+        config_getter: Callable[[], ToolConfig],
+        state: ToolState,
+        workdir_getter: Callable[[], Path] | None = None,
     ) -> None:
         self._config_getter = config_getter
         self.state = state
+        self._workdir_getter = workdir_getter
 
     @property
     def config(self) -> ToolConfig:
         return self._config_getter()
+
+    @property
+    def workdir(self) -> Path:
+        return self._workdir_getter() if self._workdir_getter else Path.cwd()
 
     @abstractmethod
     async def run(
@@ -218,11 +227,17 @@ class BaseTool[
 
     @classmethod
     def from_config(
-        cls, config_getter: Callable[[], ToolConfig]
+        cls,
+        config_getter: Callable[[], ToolConfig],
+        workdir_getter: Callable[[], Path] | None = None,
     ) -> BaseTool[ToolArgs, ToolResult, ToolConfig, ToolState]:
         state_class = cls._get_tool_state_class()
         initial_state = state_class()
-        return cls(config_getter=config_getter, state=initial_state)
+        return cls(
+            config_getter=config_getter,
+            state=initial_state,
+            workdir_getter=workdir_getter,
+        )
 
     @classmethod
     def _get_tool_config_class(cls) -> type[ToolConfig]:
@@ -401,11 +416,10 @@ class BaseTool[
         """
         return None
 
-    @staticmethod
-    def get_file_snapshot_for_path(path: str) -> FileSnapshot:
+    def get_file_snapshot_for_path(self, path: str) -> FileSnapshot:
         file_path = Path(path).expanduser()
         if not file_path.is_absolute():
-            file_path = Path.cwd() / file_path
+            file_path = self.workdir / file_path
         file_path = file_path.resolve()
         try:
             content: bytes | None = file_path.read_bytes()

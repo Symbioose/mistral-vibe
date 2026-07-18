@@ -365,9 +365,11 @@ class AgentLoop(AgentLoopHooksMixin):  # noqa: PLR0904
         mcp_registry: MCPRegistry | None = None,
         cache_store: VibeCodeCacheStore | None = None,
         force_bypass_tool_permissions: bool = False,
+        working_dir: Path | None = None,
     ) -> None:
         self._config_orchestrator = config_orchestrator
         config = config_orchestrator.config
+        self.working_dir = working_dir
         self._force_bypass_tool_permissions = force_bypass_tool_permissions
         self._apply_forced_bypass()
         self._headless = headless
@@ -407,6 +409,7 @@ class AgentLoop(AgentLoopHooksMixin):  # noqa: PLR0904
             connector_registry=self.connector_registry,
             defer_mcp=True,
             permission_getter=self._permission_store.get_tool_permission,
+            workdir_getter=self._make_workdir_getter(),
         )
         self.skill_manager = SkillManager(lambda: self.config)
         self.message_observer = message_observer
@@ -928,6 +931,12 @@ class AgentLoop(AgentLoopHooksMixin):  # noqa: PLR0904
             # later edits correctly, even if the turn opens then fails, or is
             # cancelled mid-flight.
             self.checkpoint_recorder.seal_turn()
+
+    def _make_workdir_getter(self) -> Callable[[], Path] | None:
+        working_dir = self.working_dir
+        if working_dir is None:
+            return None
+        return lambda: working_dir
 
     @property
     def teleport_service(self) -> TeleportService:
@@ -1849,6 +1858,7 @@ class AgentLoop(AgentLoopHooksMixin):  # noqa: PLR0904
                 hook_config_result=self._hook_config_result,
                 session_id=self.session_id,
                 mcp_pool=self._mcp_pool,
+                working_dir=self.working_dir,
             ),
             **tool_call.args_dict,
         ):
@@ -2498,6 +2508,7 @@ class AgentLoop(AgentLoopHooksMixin):  # noqa: PLR0904
             mcp_registry=self.mcp_registry,
             connector_registry=self.connector_registry,
             permission_getter=self._permission_store.get_tool_permission,
+            workdir_getter=self._make_workdir_getter(),
         )
         skill_manager = SkillManager(config_source.get)
         system_prompt = self._render_system_prompt(

@@ -119,7 +119,9 @@ def _get_shell_executable() -> str | None:
     return os.environ.get("SHELL")
 
 
-async def _spawn_command(command: str) -> asyncio.subprocess.Process:
+async def _spawn_command(
+    command: str, cwd: Path | None = None
+) -> asyncio.subprocess.Process:
     """Spawn ``command`` in the shell the current platform actually uses.
 
     On Windows we prefer a real bash (``bash -c``) when one is available so
@@ -128,6 +130,7 @@ async def _spawn_command(command: str) -> asyncio.subprocess.Process:
     describes the same resolved shell.
     """
     env = _get_base_env()
+    cwd_str = str(cwd) if cwd is not None else None
 
     if is_windows():
         shell = resolve_windows_shell()
@@ -140,6 +143,7 @@ async def _spawn_command(command: str) -> asyncio.subprocess.Process:
                 stderr=asyncio.subprocess.PIPE,
                 stdin=asyncio.subprocess.DEVNULL,
                 env=env,
+                cwd=cwd_str,
             )
         # Use the resolved cmd.exe path instead of COMSPEC so prompt syntax and
         # execution cannot diverge when COMSPEC points at another shell.
@@ -152,6 +156,7 @@ async def _spawn_command(command: str) -> asyncio.subprocess.Process:
             stderr=asyncio.subprocess.PIPE,
             stdin=asyncio.subprocess.DEVNULL,
             env=env,
+            cwd=cwd_str,
         )
 
     return await asyncio.create_subprocess_shell(
@@ -162,6 +167,7 @@ async def _spawn_command(command: str) -> asyncio.subprocess.Process:
         env=env,
         executable=_get_shell_executable(),
         start_new_session=True,
+        cwd=cwd_str,
     )
 
 
@@ -324,7 +330,9 @@ def _normalize_bash_path_token(token: str) -> str:
 
 
 def _collect_outside_dirs(
-    command_parts: list[str], redirect_targets: Sequence[str] = ()
+    command_parts: list[str],
+    workdir: Path | None = None,
+    redirect_targets: Sequence[str] = (),
 ) -> set[str]:
     """Collect parent directories referenced outside the workdir.
 
@@ -363,23 +371,25 @@ def _collect_outside_dirs(
             ):
                 continue
             path_token = _normalize_bash_path_token(token)
-            if is_path_within_workdir(path_token):
+            if is_path_within_workdir(path_token, workdir):
                 continue
             if is_scratchpad_path(path_token):
                 continue
             # Resolve relative / home-relative paths, then collect parent dir
             resolved = Path(path_token).expanduser()
             if not resolved.is_absolute():
-                resolved = Path.cwd() / resolved
+                resolved = (workdir or Path.cwd()) / resolved
             resolved = resolved.resolve()
             # For a directory target use the dir itself; for a file use its parent
             parent = str(resolved) if resolved.is_dir() else str(resolved.parent)
             dirs.add(parent)
 
-    return dirs | _redirect_outside_dirs(redirect_targets)
+    return dirs | _redirect_outside_dirs(redirect_targets, workdir)
 
 
-def _redirect_outside_dirs(redirect_targets: Sequence[str]) -> set[str]:
+def _redirect_outside_dirs(
+    redirect_targets: Sequence[str], workdir: Path | None
+) -> set[str]:
     dirs: set[str] = set()
     for raw_target in redirect_targets:
         target = _unquote(raw_target)
@@ -393,11 +403,13 @@ def _redirect_outside_dirs(redirect_targets: Sequence[str]) -> set[str]:
             dirs.add(target)
             continue
         path_token = _normalize_bash_path_token(target)
-        if is_path_within_workdir(path_token) or is_scratchpad_path(path_token):
+        if is_path_within_workdir(path_token, workdir) or is_scratchpad_path(
+            path_token
+        ):
             continue
         resolved = Path(path_token).expanduser()
         if not resolved.is_absolute():
-            resolved = Path.cwd() / resolved
+            resolved = (workdir or Path.cwd()) / resolved
         resolved = resolved.resolve()
         dirs.add(str(resolved) if resolved.is_dir() else str(resolved.parent))
     return dirs
@@ -628,7 +640,7 @@ class Bash(
         ):
             return guardrail_permission
         outside_dirs = _collect_outside_dirs(
-            command_parts, _extract_redirect_targets(args.command)
+            command_parts, self.workdir, _extract_redirect_targets(args.command)
         )
         if (
             self._is_unconditionally_allowed(command_parts, outside_dirs)
@@ -675,7 +687,7 @@ class Bash(
 
         proc = None
         try:
-            proc = await _spawn_command(args.command)
+            proc = await _spawn_command(args.command, cwd=self.workdir)
 
             try:
                 stdout_bytes, stderr_bytes = await asyncio.wait_for(
