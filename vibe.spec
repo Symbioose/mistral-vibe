@@ -18,7 +18,7 @@ for item in core_builtins_hidden_imports:
 
 binaries = core_builtins_binaries
 
-datas = collect_data_files("vibe", includes=["**/*.md", "**/*.tcss"])
+datas = collect_data_files("vibe", includes=["**/*.md", "**/*.tcss", "**/*.wav"])
 datas += [("vibe/core/tools/builtins/*.py", "vibe/core/tools/builtins")]
 # Built-in skills are read from source files at runtime, so collect_data_files
 # must be allowed to include .py files here. By default it filters .py/.pyc out.

@@ -265,6 +265,7 @@ class VibeConfig(BaseSettings):
     context_warnings: bool = False
     voice_mode_enabled: bool = False
     narrator_enabled: bool = False
+    meow_enabled: bool = True
     active_transcribe_model: str = DEFAULT_ACTIVE_TRANSCRIBE_MODEL_CONFIG.alias
     active_tts_model: str = DEFAULT_ACTIVE_TTS_MODEL_CONFIG.alias
     bypass_tool_permissions: bool = False

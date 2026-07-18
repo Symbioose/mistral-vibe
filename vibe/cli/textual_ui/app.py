@@ -6,6 +6,7 @@ from collections.abc import AsyncGenerator
 from contextlib import aclosing, suppress
 from dataclasses import dataclass
 from enum import StrEnum, auto
+from functools import cached_property
 import gc
 import os
 from pathlib import Path
@@ -61,6 +62,7 @@ from vibe.cli.textual_ui.mcp_commands import (
     parse_mcp_add_args,
     parse_mcp_subcommand,
 )
+from vibe.cli.textual_ui.meow_manager import MeowManager
 from vibe.cli.textual_ui.message_queue import MessageQueue, QueueController, QueuePorts
 from vibe.cli.textual_ui.notifications import (
     NotificationContext,
@@ -953,8 +955,12 @@ class VibeApp(App):  # noqa: PLR0904
         return self.config.file_watcher_for_autocomplete
 
     def on_key(self) -> None:
+        self._meow_manager.stop()
         if self._fatal_init_error:
             self.exit()
+
+    def on_chat_text_area_keystroke(self, _message: ChatTextArea.Keystroke) -> None:
+        self._meow_manager.stop()
 
     async def on_chat_input_container_submitted(
         self, event: ChatInputContainer.Submitted
@@ -1077,6 +1083,13 @@ class VibeApp(App):  # noqa: PLR0904
         if self._queue.draining:
             return True
         return False
+
+    @cached_property
+    def _meow_manager(self) -> MeowManager:
+        return MeowManager(
+            is_enabled=lambda: self.config.meow_enabled,
+            should_meow=lambda: not self._is_busy(),
+        )
 
     async def on_approval_app_approval_granted(
         self, message: ApprovalApp.ApprovalGranted
@@ -2252,6 +2265,7 @@ class VibeApp(App):  # noqa: PLR0904
         prebuilt_payload: PathPromptPayload | None = None,
     ) -> None:
         self._agent_running = True
+        self._meow_manager.stop()
 
         await self._remove_loading_widget()
 
@@ -2323,6 +2337,7 @@ class VibeApp(App):  # noqa: PLR0904
             self._queue.start_drain_if_needed()
             await self._refresh_windowing_from_history()
             self._terminal_notifier.notify(NotificationContext.COMPLETE)
+            self._meow_manager.meow_once()
 
     def _resolve_turn_error_message(self, e: Exception) -> str:
         if isinstance(e, RateLimitError):
@@ -4278,10 +4293,13 @@ class VibeApp(App):  # noqa: PLR0904
                 self._bash_task.cancel()
             self._log_reader.shutdown()
             self._narrator_manager.cancel()
+            self._meow_manager.stop()
         finally:
             self.exit(result=self._get_session_resume_info())
 
     async def shutdown_cleanup(self) -> None:
+        with suppress(Exception):
+            self._meow_manager.stop()
         with suppress(Exception):
             await self._begin_shutdown()
         for task in (self._agent_task, self._bash_task):

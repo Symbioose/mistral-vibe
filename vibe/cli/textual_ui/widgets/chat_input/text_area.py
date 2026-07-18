@@ -89,6 +89,9 @@ class ChatTextArea(TextArea):
     class HistoryReset(Message):
         """Message sent when history navigation should be reset."""
 
+    class Keystroke(Message):
+        """Posted on every key press so the app can react to typing activity."""
+
     class ModeChanged(Message):
         """Message sent when the input mode changes (>, !, /, &)."""
 
@@ -323,6 +326,7 @@ class ChatTextArea(TextArea):
 
     async def _on_key(self, event: events.Key) -> None:  # noqa: PLR0911
         self._last_keystroke_time = time.monotonic()
+        self.post_message(self.Keystroke())
 
         if await self._handle_voice_key(event):
             return
