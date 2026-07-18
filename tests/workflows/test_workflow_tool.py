@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar, cast
 
 import pytest
 
@@ -27,7 +27,7 @@ result({"outs": outs})
 
 
 class FakeSpawner:
-    calls: list[SubagentRequest] = []
+    calls: ClassVar[list[SubagentRequest]] = []
 
     def __init__(self, _ctx: InvokeContext, _config: WorkflowToolConfig) -> None:
         pass
@@ -48,7 +48,7 @@ def fake_spawner(monkeypatch: pytest.MonkeyPatch) -> type[FakeSpawner]:
 
 
 def make_tool() -> Workflow:
-    return Workflow.from_config(lambda: WorkflowToolConfig())
+    return cast(Workflow, Workflow.from_config(lambda: WorkflowToolConfig()))
 
 
 async def collect(

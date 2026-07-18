@@ -31,7 +31,7 @@ from vibe.core.tools.builtins.read_file import ReadFileArgs, ReadFileResult
 from vibe.core.tools.builtins.todo import TodoArgs, TodoResult
 from vibe.core.tools.builtins.web_fetch import WebFetchResult
 from vibe.core.tools.builtins.web_search import WebSearchResult, WebSearchSource
-from vibe.core.tools.builtins.workflow import WorkflowResult
+from vibe.core.tools.builtins.workflow import WorkflowArgs, WorkflowResult
 from vibe.core.tools.builtins.write_file import WriteFileArgs, WriteFileResult
 from vibe.core.workflows.models import WorkflowStatus
 
@@ -429,6 +429,27 @@ class WebFetchResultWidget(ToolResultWidget[WebFetchResult]):
         yield from self._footer()
 
 
+class WorkflowApprovalWidget(ToolApprovalWidget[WorkflowArgs]):
+    def compose(self) -> ComposeResult:
+        if self.args.script_path:
+            yield NoMarkupStatic(
+                f"Script: {self.args.script_path}", classes="approval-description"
+            )
+        if self.args.args is not None:
+            yield NoMarkupStatic(
+                f"args: {json.dumps(self.args.args, ensure_ascii=False)}",
+                classes="approval-description",
+            )
+        if self.args.resume_from_run_id:
+            yield NoMarkupStatic(
+                f"Resuming from run: {self.args.resume_from_run_id}",
+                classes="approval-description",
+            )
+        if self.args.script:
+            yield NoMarkupStatic("")
+            yield Markdown(_fenced_code_block(self.args.script, "python"))
+
+
 class WorkflowResultWidget(ToolResultWidget[WorkflowResult]):
     def compose(self) -> ComposeResult:
         if not self.result:
@@ -456,6 +477,7 @@ APPROVAL_WIDGETS: dict[str, type[ToolApprovalWidget]] = {
     "edit": EditApprovalWidget,
     "grep": GrepApprovalWidget,
     "todo": TodoApprovalWidget,
+    "workflow": WorkflowApprovalWidget,
 }
 
 RESULT_WIDGETS: dict[str, type[ToolResultWidget]] = {

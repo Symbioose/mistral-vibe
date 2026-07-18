@@ -11,10 +11,8 @@ import uuid
 
 from pydantic import BaseModel, Field
 
-from vibe.core.agent_loop import AgentLoop
 from vibe.core.agents.models import AgentType, BuiltinAgentName
 from vibe.core.config import SessionLoggingConfig, VibeConfig
-from vibe.core.config.orchestrator_legacy import LegacyConfigOrchestrator
 from vibe.core.logger import logger
 from vibe.core.tools.base import (
     BaseTool,
@@ -110,6 +108,11 @@ class _AgentLoopSpawner:
     async def run(
         self, request: SubagentRequest, on_progress: Callable[[str], None]
     ) -> SubagentOutcome:
+        # Deferred: importing AgentLoop at module scope would defeat the TUI's
+        # lazy startup (this module is imported by the result-widget registry).
+        from vibe.core.agent_loop import AgentLoop
+        from vibe.core.config.orchestrator_legacy import LegacyConfigOrchestrator
+
         ctx = self._ctx
         if not ctx.agent_manager:
             return SubagentOutcome(
