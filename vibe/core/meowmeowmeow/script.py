@@ -280,7 +280,24 @@ def _collect_violations(tree: ast.Module) -> list[str]:
                 )
     errors.extend(_collect_missing_awaits(tree))
     errors.extend(_collect_sequential_awaits(tree))
+    if not _has_top_level_await(tree):
+        errors.append(
+            "the script never awaits anything at top level — nothing would run. "
+            "Defining async functions is not enough: the top level must "
+            "`await parallel(...)`/`await agent(...)` (or await your own function)"
+        )
     return errors
+
+
+def _has_top_level_await(tree: ast.Module) -> bool:
+    def _walk_outside_functions(node: ast.AST) -> Iterator[ast.AST]:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                continue
+            yield child
+            yield from _walk_outside_functions(child)
+
+    return any(isinstance(node, ast.Await) for node in _walk_outside_functions(tree))
 
 
 def _collect_sequential_awaits(tree: ast.Module) -> list[str]:

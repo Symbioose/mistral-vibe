@@ -282,6 +282,9 @@ class MeowMeowMeow(
             raise ToolError("MeowMeowMeow tool requires an invocation context")
 
         source = self._load_source(args)
+        prompts = (
+            args.prompts if args.prompts is not None else self._sidecar_prompts(args)
+        )
         try:
             parsed = parse_meow_meow_meow_script(source)
         except MeowMeowMeowScriptError as e:
@@ -292,22 +295,14 @@ class MeowMeowMeow(
         run_dir.mkdir(parents=True, exist_ok=True)
         (run_dir / "script.py").write_text(source, encoding="utf-8")
 
-        resume_journal: Path | None = None
-        if args.resume_from_run_id:
-            candidate = self._runs_dir(ctx) / args.resume_from_run_id / "journal.jsonl"
-            if not candidate.exists():
-                raise ToolError(f"No journal found for run '{args.resume_from_run_id}'")
-            resume_journal = candidate
-        journal = MeowMeowMeowJournal.create(
-            run_dir / "journal.jsonl", resume_from=resume_journal
-        )
+        journal = self._prepare_journal(ctx, args, run_dir)
 
         queue: asyncio.Queue[MeowMeowMeowEvent | None] = asyncio.Queue()
         runtime = MeowMeowMeowRuntime(
             parsed,
             _AgentLoopSpawner(ctx, self.config),
             args=args.args,
-            prompts=args.prompts,
+            prompts=prompts,
             fast_model=self.config.fast_model,
             on_event=queue.put_nowait,
             journal=journal,
@@ -394,6 +389,39 @@ class MeowMeowMeow(
                 ],
             },
         )
+
+    def _prepare_journal(
+        self, ctx: InvokeContext, args: MeowMeowMeowArgs, run_dir: Path
+    ) -> MeowMeowMeowJournal:
+        resume_journal: Path | None = None
+        if args.resume_from_run_id:
+            candidate = self._runs_dir(ctx) / args.resume_from_run_id / "journal.jsonl"
+            if not candidate.exists():
+                raise ToolError(f"No journal found for run '{args.resume_from_run_id}'")
+            resume_journal = candidate
+        return MeowMeowMeowJournal.create(
+            run_dir / "journal.jsonl", resume_from=resume_journal
+        )
+
+    @staticmethod
+    def _sidecar_prompts(args: MeowMeowMeowArgs) -> dict[str, str] | None:
+        # A script file may ship its briefs alongside: <name>.prompts.json.
+        if not args.script_path:
+            return None
+        sidecar = Path(args.script_path).with_suffix(".prompts.json")
+        if not sidecar.is_file():
+            return None
+        try:
+            loaded = json.loads(sidecar.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            raise ToolError(f"Invalid prompts sidecar {sidecar.name}: {e}") from e
+        if not isinstance(loaded, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in loaded.items()
+        ):
+            raise ToolError(
+                f"Prompts sidecar {sidecar.name} must be a JSON object of strings"
+            )
+        return loaded
 
     @staticmethod
     def _load_source(args: MeowMeowMeowArgs) -> str:

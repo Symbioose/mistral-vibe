@@ -1,0 +1,4 @@
+{
+  "scan": "Tu audites des modules Python utilitaires pour trouver des BUGS DE LOGIQUE (operateur inverse, off-by-one, element saute, condition fausse). Lis ENTIEREMENT chaque fichier liste ci-dessous avec read_file, fonction par fonction. Ne rapporte que les fonctions dont le comportement est reellement faux — pas de style, pas de suppositions. Reponds UNIQUEMENT en JSON: {\"bugs\": [{\"file\": \"<basename>\", \"function\": \"<nom>\", \"description\": \"<pourquoi c'est faux>\"}]}.\n\nFichiers a auditer:\n",
+  "verify": "Un auditeur pretend que la fonction suivante contient un bug de logique. Relis la fonction COMPLETE dans son fichier avec read_file et verifie le comportement pas a pas. Essaie de REFUTER le finding. Reponds UNIQUEMENT en JSON: {\"confirmed\": true|false, \"reason\": \"...\"}. Finding a verifier: "
+}

@@ -14,6 +14,7 @@ meta = {
     "description": "A demo meow_meow_meow",
     "phases": [{"title": "Scan"}, {"title": "Fix", "detail": "one agent per item"}],
 }
+out = await agent("go")
 result(42)
 """
 
@@ -201,10 +202,24 @@ def test_meta_strings_exempt_from_string_cap() -> None:
     script = (
         f'meta = {{"name": "x", "description": "ok", '
         f'"phases": [{{"title": "Scan", "detail": "{detail}"}}]}}\n'
+        'await agent("a")\n'
         "return None\n"
     )
     parsed = parse_meow_meow_meow_script(script)
     assert parsed.meta.name == "x"
+
+
+def test_no_top_level_await_rejected() -> None:
+    script = (
+        'meta = {"name": "x", "description": "d"}\n'
+        "async def do_everything():\n"
+        '    return await agent("x")\n'
+        "result(None)\n"
+    )
+    with pytest.raises(
+        MeowMeowMeowScriptError, match="never awaits anything at top level"
+    ):
+        parse_meow_meow_meow_script(script)
 
 
 def test_too_many_lines_rejected() -> None:
