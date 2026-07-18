@@ -75,6 +75,7 @@ Subagents are told their final text IS the return value (not a human-facing mess
 - `time.time()`, `datetime.now()`, `random`, filesystem and network access are unavailable inside scripts (they would break resume) — pass timestamps and randomness in via `args`; subagents do the real-world work.
 - If a workflow bounds coverage (top-N, sampling), `log()` what was dropped — silent truncation reads as "covered everything" when it didn't.
 - Each agent's inner tool activity already streams live to the user — use `log()` for workflow-level milestones (phase transitions, counts, decisions), not to narrate individual agents.
+- NEVER index into an agent's result (`out["key"]`, `out[0]`) unless that call used `schema=` — without a schema the result is free text. And ALWAYS guard for `None` before indexing: failed agents return `None` (`[o for o in outs if o]`).
 
 ## Patterns
 

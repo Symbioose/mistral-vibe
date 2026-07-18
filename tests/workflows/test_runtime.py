@@ -329,6 +329,8 @@ async def test_script_exception_fails_with_location() -> None:
     assert outcome.error is not None
     assert "KeyError" in outcome.error
     assert "script line" in outcome.error
+    assert "schema=" in outcome.error
+    assert "resume_from_run_id" in outcome.error
 
 
 @pytest.mark.asyncio

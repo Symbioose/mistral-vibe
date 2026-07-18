@@ -438,4 +438,13 @@ class WorkflowRuntime:
         if script_frames:
             last = script_frames[-1]
             location = f" (script line {last.lineno})"
-        return f"{type(e).__name__}: {e}{location}"
+        message = f"{type(e).__name__}: {e}{location}"
+        if isinstance(e, (KeyError, TypeError, AttributeError, IndexError)):
+            message += (
+                "\nThis usually means the script indexed into an agent result "
+                "without guarantees about its shape. Pass schema= to agent() so "
+                "the result is validated JSON, and guard for None (failed agents "
+                "return None). Fix the script and re-invoke with "
+                "resume_from_run_id — successful agents replay from the journal."
+            )
+        return message
