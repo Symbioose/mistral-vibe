@@ -234,6 +234,7 @@ RESERVED_PRIMITIVES = frozenset({
     "result",
     "args",
     "prompts",
+    "fast_model",
 })
 
 

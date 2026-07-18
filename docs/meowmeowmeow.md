@@ -67,6 +67,19 @@ Every run persists `script.py`, `journal.jsonl`, and `result.json` under
 only edited or previously-failed calls run live. Failed calls are never
 journaled, so a resume retries exactly what needs retrying.
 
+## Model tiering
+
+Set a faster model for mechanical shard work in your config:
+
+```toml
+[tools.meow_meow_meow]
+fast_model = "devstral-2"   # any alias from your configured models
+```
+
+Scripts see it as the global `fast_model` (`None` when unset) and are
+instructed to pass `model=fast_model` for scanning/enumeration agents while
+keeping the default model for verification and synthesis.
+
 ## Subagents
 
 Each `agent()` call runs a fresh `AgentLoop` with a subagent profile

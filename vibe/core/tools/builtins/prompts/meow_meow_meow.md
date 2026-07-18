@@ -83,7 +83,9 @@ Subagents are told their final text IS the return value (not a human-facing mess
 - If a meow_meow_meow bounds coverage (top-N, sampling), `log()` what was dropped — silent truncation reads as "covered everything" when it didn't.
 - Each agent's inner tool activity already streams live to the user — use `log()` for meow_meow_meow-level milestones (phase transitions, counts, decisions), not to narrate individual agents.
 - NEVER index into an agent's result (`out["key"]`, `out[0]`) unless that call used `schema=` — without a schema the result is free text. And ALWAYS guard for `None` before indexing: failed agents return `None` (`[o for o in outs if o]`).
-- NEVER await agents one at a time in a loop (`for x in items: await agent(...)`) — that serializes everything and wastes wall-clock. Within a phase, ALWAYS fan out with `parallel([...])` or `pipeline(...)`; sequential awaits are only for genuine dependencies BETWEEN phases.
+- NEVER await agents one at a time in a loop (`for x in items: await agent(...)`) — that serializes everything and wastes wall-clock. Within a phase, ALWAYS fan out with `parallel([...])` or `pipeline(...)`; sequential awaits are only for genuine dependencies BETWEEN phases. Two `await agent(...)` statements in a row with no data dependency between them are a bug: wrap them in one `parallel([...])`.
+- SHARD heavy briefs. One agent covering a whole codebase or >~10 files will run for many minutes and read shallowly. Split it into disjoint slices (`scan:core`, `scan:cli`, `scan:tests`… or by file batch) run in ONE `parallel([...])`, and merge in code. An agent expected to run over ~2 minutes is a decomposition failure, not thoroughness.
+- MODEL TIERING: the global `fast_model` holds the alias of a faster configured model (or `None` if the user has not set one). For mechanical shard work (scanning, enumeration, extraction) pass `model=fast_model` when it is set; keep the default model for judgment work (verification, synthesis, adversarial review).
 - ALWAYS declare `meta["phases"]` (one entry per `phase()` call, with a short `detail`): the UI shows the full plan upfront and tracks each phase live.
 
 ## Patterns

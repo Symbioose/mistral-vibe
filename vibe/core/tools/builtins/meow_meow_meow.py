@@ -116,6 +116,7 @@ class MeowMeowMeowToolConfig(BaseToolConfig):
     max_concurrency: int | None = None
     max_agents: int = 1000
     schema_retries: int = 2
+    fast_model: str | None = None
 
 
 class _AgentLoopSpawner:
@@ -307,6 +308,7 @@ class MeowMeowMeow(
             _AgentLoopSpawner(ctx, self.config),
             args=args.args,
             prompts=args.prompts,
+            fast_model=self.config.fast_model,
             on_event=queue.put_nowait,
             journal=journal,
             max_concurrency=self.config.max_concurrency,

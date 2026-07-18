@@ -110,6 +110,22 @@ async def test_args_passthrough() -> None:
 
 
 @pytest.mark.asyncio
+async def test_fast_model_passthrough() -> None:
+    spawner = FakeSpawner()
+    runtime = MeowMeowMeowRuntime(
+        parse_meow_meow_meow_script(
+            make_script('await agent("x", model=fast_model)\nreturn fast_model')
+        ),
+        spawner,
+        fast_model="tiny-model",
+    )
+    outcome = await runtime.run()
+    assert outcome.status is MeowMeowMeowStatus.COMPLETED
+    assert outcome.value == "tiny-model"
+    assert spawner.calls[0].model == "tiny-model"
+
+
+@pytest.mark.asyncio
 async def test_prompts_passthrough() -> None:
     spawner = FakeSpawner()
     events: list[Any] = []

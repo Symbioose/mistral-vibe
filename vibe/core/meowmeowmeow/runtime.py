@@ -65,6 +65,7 @@ class MeowMeowMeowRuntime:
         *,
         args: Any = None,
         prompts: dict[str, str] | None = None,
+        fast_model: str | None = None,
         on_event: Callable[[MeowMeowMeowEvent], None] | None = None,
         journal: MeowMeowMeowJournal | None = None,
         max_concurrency: int | None = None,
@@ -75,6 +76,7 @@ class MeowMeowMeowRuntime:
         self._spawner = spawner
         self._args = args
         self._prompts = dict(prompts) if prompts else {}
+        self._fast_model = fast_model
         self._on_event = on_event
         self._journal = journal
         self._semaphore = asyncio.Semaphore(
@@ -144,6 +146,7 @@ class MeowMeowMeowRuntime:
             "result": self._result,
             "args": self._args,
             "prompts": self._prompts,
+            "fast_model": self._fast_model,
         }
 
     async def _agent(

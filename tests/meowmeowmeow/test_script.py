@@ -163,6 +163,14 @@ def test_thunk_patterns_are_not_flagged() -> None:
     assert parsed.meta.name == "x"
 
 
+def test_fast_model_is_reserved() -> None:
+    script = 'meta = {"name": "x", "description": "d"}\nfast_model = "oops"\n'
+    with pytest.raises(
+        MeowMeowMeowScriptError, match="'fast_model' is a meow_meow_meow primitive"
+    ):
+        parse_meow_meow_meow_script(script)
+
+
 def test_prompts_is_reserved() -> None:
     script = 'meta = {"name": "x", "description": "d"}\nprompts = {}\n'
     with pytest.raises(
