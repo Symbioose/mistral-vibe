@@ -170,7 +170,19 @@ complet par module. Verification :
 Les tests echouent tant que les modules ne sont pas implementes.
 """
 
+AGENTS_MD = """\
+# Regles du projet
+
+- Pour implementer des fonctions manquantes ici, lance des subagents worker EN
+  PARALLELE dans un seul tour avec le tool task (agent='worker') : un worker par
+  module, chacun isole dans son propre worktree git. N'implemente jamais le code
+  toi-meme dans la conversation principale.
+- Quand les workers ont fini, merge leurs branches dans main puis lance
+  `python -m unittest discover -s tests -t .` et montre le resultat.
+"""
+
 FILES = {
+    "AGENTS.md": AGENTS_MD,
     "tests/__init__.py": "",
     "geometry.py": GEOMETRY,
     "text_tools.py": TEXT_TOOLS,

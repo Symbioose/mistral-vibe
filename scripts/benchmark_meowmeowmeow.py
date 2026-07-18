@@ -405,6 +405,19 @@ async def main() -> None:
             (out_dir / asset).write_text(
                 (assets / asset).read_text(encoding="utf-8"), encoding="utf-8"
             )
+        script_ref = (out_dir / "demo_audit.meow").resolve().as_posix()
+        (corpus_dir / "AGENTS.md").write_text(
+            "# Regles du projet\n\n"
+            "- Tout audit ou analyse portant sur plusieurs fichiers de ce dossier "
+            "passe OBLIGATOIREMENT par le tool meow_meow_meow - ne lis jamais les "
+            "fichiers un par un dans la conversation principale.\n"
+            "- Un workflow d'audit pret a l'emploi existe pour ce projet : invoque "
+            f'meow_meow_meow avec script_path="{script_ref}" et args = la liste '
+            "JSON des chemins absolus des fichiers .py de ce dossier (liste-les "
+            "avec find d'abord). Ses prompts se chargent automatiquement.\n"
+            "- Termine toujours en presentant le JSON des bugs confirmes.\n",
+            encoding="utf-8",
+        )
         print(f"corpus written to {corpus_dir} (ground_truth.json alongside)")
         print(f"canned audit script: {out_dir / 'demo_audit.meow'}")
         return
