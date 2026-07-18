@@ -38,26 +38,35 @@ jobs** — the tool prompt says so, and this is the measured reason.
 At 3× the corpus size the crossover has happened: the fan-out is **1.6×
 faster** and uses **1.9× fewer tokens** at identical (perfect) accuracy.
 
+## Maximum scale — 96 files (~130 lines each), 48 bugs
+
+| condition | wall (s) | tokens | agents (api/cached) | bugs found | recall | precision |
+|---|---|---|---|---|---|---|
+| baseline (1 agent) | 469.6 | 1 717 909 | 1/0 | 48/48 | 100% | 100% |
+| meow_meow_meow (32 agents) | **37.6** | **305 908** | 32/0 | 48/48 | 100% | 100% |
+| meow resume (journal) | **0.0** | **0** | 0/32 | 48/48 | 100% | 100% |
+
+**12.5× faster, 5.6× cheaper, identical perfect accuracy** (48/48, zero false
+positives, verified against the exact planted list). The single agent spent
+7 min 50 s and 1.72 M tokens on what the fan-out did in 38 seconds.
+
 ## The scaling law is the real result
 
-Going from 12 to 36 files:
-
-| | baseline tokens | meow tokens |
-|---|---|---|
-| 12 files | 15 423 | 40 014 |
-| 36 files | 221 791 (**×14.4**) | 115 307 (**×2.9**) |
+| corpus | baseline tokens | baseline wall | meow tokens | meow wall |
+|---|---|---|---|---|
+| 12 files | 15 423 | 12.2 s | 40 014 | 29.3 s |
+| 36 files | 221 791 | 44.1 s | 115 307 | 28.2 s |
+| 96 files | 1 717 909 | 469.6 s | 305 908 | 37.6 s |
+| **×8 files** | **×111** | **×38** | **×7.6** | **×1.3** |
 
 The single agent re-sends its entire accumulated context on every tool turn,
-so its token cost grows **super-linearly** with corpus size (and eventually
-hits the context ceiling and compaction, which silently drops information).
-The fan-out pays a fixed per-agent overhead (~2k system prompt) and then
-grows **linearly** — each agent sees only its batch. Extrapolating the
-measured trend, a 100-file audit costs the baseline millions of tokens (if
-it survives at all) and the workflow roughly 300k.
-
-Wall-clock follows the same shape: the baseline reads files sequentially
-(O(n)), the fan-out is bounded by its slowest batch (O(n / concurrency),
-cap = min(16, cores − 2)).
+so its token cost grows **super-linearly** with corpus size (×111 for ×8
+corpus) and its wall-clock is sequential. The fan-out pays a fixed per-agent
+overhead and then grows **linearly in tokens and near-flat in wall-clock**
+(29 s → 38 s across an 8× corpus): each agent sees only its batch, and the
+slowest batch bounds the run. The earlier extrapolation ("a 100-file audit
+costs the baseline millions of tokens and the workflow ~300k") was measured
+almost exactly at 96 files: 1.72 M vs 306 k.
 
 ## What the journal buys — measured
 
@@ -73,6 +82,7 @@ violation listed — a failed attempt costs zero agent tokens.
 ```
 uv run python scripts/benchmark_meowmeowmeow.py --out bench_small
 uv run python scripts/benchmark_meowmeowmeow.py --files 36 --bugs 18 --batch 3 --fillers 14 --out bench_large
+uv run python scripts/benchmark_meowmeowmeow.py --files 96 --bugs 48 --batch 3 --fillers 14 --concurrency 16 --out bench_max
 ```
 
 Single-run measurements (n=1 per condition) on one machine/network; treat
