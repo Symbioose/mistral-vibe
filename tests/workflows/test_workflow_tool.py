@@ -168,6 +168,13 @@ async def test_failed_workflow_reports_error_and_resume_hint(
     assert final.run_id in extra
 
 
+def test_script_arg_has_max_length_in_schema() -> None:
+    parameters = Workflow.get_parameters()
+    script_schema = parameters["properties"]["script"]
+    variants = script_schema.get("anyOf", [script_schema])
+    assert any(v.get("maxLength") == 10_000 for v in variants)
+
+
 def test_tool_name_and_description() -> None:
     assert Workflow.get_name() == "workflow"
     description = Workflow.get_full_description()

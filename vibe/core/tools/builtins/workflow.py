@@ -68,7 +68,13 @@ _SUBAGENT_PREAMBLE = (
 class WorkflowArgs(BaseModel):
     script: str | None = Field(
         default=None,
-        description="Self-contained async Python workflow script starting with a `meta = {...}` literal",
+        max_length=10_000,
+        description=(
+            "Self-contained async Python workflow script starting with a "
+            "`meta = {...}` literal. Hard limit 10000 chars / 200 lines: keep it "
+            "short mechanical code — every prose agent brief goes in `prompts`, "
+            "referenced as prompts[\"key\"]"
+        ),
     )
     script_path: str | None = Field(
         default=None,
