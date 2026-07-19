@@ -17,14 +17,16 @@ def test_kitten_art_is_compact_braille():
 
 def test_fat_cat_art_is_bigger_than_the_kitten():
     fat_lines = FAT_CAT_ART.splitlines()
-    assert len(fat_lines) == 3
+    assert len(fat_lines) == 2
     fat_dots = sum(row.count("#") for row in _FAT_CAT_GRID)
     kitten_dots = sum(row.count("#") for row in _KITTEN_GRID)
     assert fat_dots > kitten_dots
+    assert max(len(line.rstrip()) for line in fat_lines) > max(
+        len(line.rstrip()) for line in KITTEN_ART.splitlines()
+    )
 
 
-def test_both_cats_share_the_banner_head():
-    # Same face (ears, eyes, chin) so the cat family is visually consistent.
-    kitten_head = [row[:10] for row in _KITTEN_GRID[:8]]
-    fat_head = [row[:10] for row in _FAT_CAT_GRID[:8]]
-    assert kitten_head[:5] == fat_head[:5]
+def test_cats_stay_compact_for_the_transcript():
+    assert len(KITTEN_ART.splitlines()) == 2
+    assert len(FAT_CAT_ART.splitlines()) == 2
+    assert max(len(line) for line in FAT_CAT_ART.splitlines()) <= 12
