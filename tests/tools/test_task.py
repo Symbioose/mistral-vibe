@@ -10,15 +10,32 @@ from vibe.core.agents.manager import AgentManager
 from vibe.core.agents.models import BUILTIN_AGENTS, AgentType
 from vibe.core.config.orchestrator_legacy import LegacyConfigOrchestrator
 from vibe.core.telemetry.types import LaunchContext, TerminalEmulator
-from vibe.core.tools.base import BaseToolState, InvokeContext, ToolError, ToolPermission
-from vibe.core.tools.builtins.task import Task, TaskArgs, TaskResult, TaskToolConfig
+from vibe.core.tools.base import InvokeContext, ToolError, ToolPermission
+from vibe.core.tools.builtins.task import (
+    Task,
+    TaskArgs,
+    TaskResult,
+    TaskToolConfig,
+    TaskToolState,
+)
 from vibe.core.tools.permissions import PermissionContext
-from vibe.core.types import AssistantEvent, LLMMessage, Role
+from vibe.core.types import AgentStats, AssistantEvent, LLMMessage, Role
 
 
 @pytest.fixture
 def task_tool() -> Task:
-    return Task(config_getter=lambda: TaskToolConfig(), state=BaseToolState())
+    return Task(config_getter=lambda: TaskToolConfig(), state=TaskToolState())
+
+
+def make_mock_subagent_loop(act, messages: list[LLMMessage]) -> MagicMock:
+    mock_agent_loop = MagicMock()
+    mock_agent_loop.act = act
+    mock_agent_loop.messages = messages
+    mock_agent_loop.session_id = "child-session"
+    mock_agent_loop.stats = AgentStats()
+    mock_agent_loop.set_approval_callback = MagicMock()
+    mock_agent_loop.aclose = AsyncMock()
+    return mock_agent_loop
 
 
 class TestTaskArgs:
@@ -101,7 +118,7 @@ class TestTaskToolResolvePermission:
 
     def test_denylist_takes_precedence(self) -> None:
         config = TaskToolConfig(allowlist=["explore"], denylist=["explore"])
-        tool = Task(config_getter=lambda: config, state=BaseToolState())
+        tool = Task(config_getter=lambda: config, state=TaskToolState())
         args = TaskArgs(task="do something", agent="explore")
         result = tool.resolve_permission(args)
         assert isinstance(result, PermissionContext)
@@ -109,7 +126,7 @@ class TestTaskToolResolvePermission:
 
     def test_glob_pattern_in_allowlist(self) -> None:
         config = TaskToolConfig(allowlist=["exp*"])
-        tool = Task(config_getter=lambda: config, state=BaseToolState())
+        tool = Task(config_getter=lambda: config, state=TaskToolState())
         args = TaskArgs(task="do something", agent="explore")
         result = tool.resolve_permission(args)
         assert isinstance(result, PermissionContext)
@@ -117,7 +134,7 @@ class TestTaskToolResolvePermission:
 
     def test_glob_pattern_in_denylist(self) -> None:
         config = TaskToolConfig(denylist=["danger*"])
-        tool = Task(config_getter=lambda: config, state=BaseToolState())
+        tool = Task(config_getter=lambda: config, state=TaskToolState())
         args = TaskArgs(task="do something", agent="dangerous_agent")
         result = tool.resolve_permission(args)
         assert isinstance(result, PermissionContext)
@@ -125,7 +142,7 @@ class TestTaskToolResolvePermission:
 
     def test_empty_lists_returns_none(self) -> None:
         config = TaskToolConfig(allowlist=[], denylist=[])
-        tool = Task(config_getter=lambda: config, state=BaseToolState())
+        tool = Task(config_getter=lambda: config, state=TaskToolState())
         args = TaskArgs(task="do something", agent="explore")
         result = tool.resolve_permission(args)
         assert result is None
@@ -169,11 +186,9 @@ class TestTaskToolExecution:
             yield AssistantEvent(content=" More content.")
 
         with patch("vibe.core.tools.builtins.task.AgentLoop") as mock_agent_loop_class:
-            mock_agent_loop = MagicMock()
-            mock_agent_loop.act = mock_act
-            mock_agent_loop.messages = mock_messages
-            mock_agent_loop.set_approval_callback = MagicMock()
-            mock_agent_loop_class.return_value = mock_agent_loop
+            mock_agent_loop_class.return_value = make_mock_subagent_loop(
+                mock_act, mock_messages
+            )
 
             args = TaskArgs(task="explore the codebase", agent="explore")
             result = await collect_result(task_tool.run(args, ctx))
@@ -203,11 +218,9 @@ class TestTaskToolExecution:
             yield AssistantEvent(content="Partial response", stopped_by_middleware=True)
 
         with patch("vibe.core.tools.builtins.task.AgentLoop") as mock_agent_loop_class:
-            mock_agent_loop = MagicMock()
-            mock_agent_loop.act = mock_act
-            mock_agent_loop.messages = mock_messages
-            mock_agent_loop.set_approval_callback = MagicMock()
-            mock_agent_loop_class.return_value = mock_agent_loop
+            mock_agent_loop_class.return_value = make_mock_subagent_loop(
+                mock_act, mock_messages
+            )
 
             args = TaskArgs(task="do something", agent="explore")
             result = await collect_result(task_tool.run(args, ctx))
@@ -227,11 +240,9 @@ class TestTaskToolExecution:
             raise RuntimeError("Simulated error")
 
         with patch("vibe.core.tools.builtins.task.AgentLoop") as mock_agent_loop_class:
-            mock_agent_loop = MagicMock()
-            mock_agent_loop.act = mock_act
-            mock_agent_loop.messages = mock_messages
-            mock_agent_loop.set_approval_callback = MagicMock()
-            mock_agent_loop_class.return_value = mock_agent_loop
+            mock_agent_loop_class.return_value = make_mock_subagent_loop(
+                mock_act, mock_messages
+            )
 
             args = TaskArgs(task="do something", agent="explore")
             result = await collect_result(task_tool.run(args, ctx))
@@ -248,11 +259,9 @@ class TestTaskToolExecution:
             yield AssistantEvent(content="done")
 
         with patch("vibe.core.tools.builtins.task.AgentLoop") as mock_agent_loop_class:
-            mock_agent_loop = MagicMock()
-            mock_agent_loop.act = mock_act
-            mock_agent_loop.messages = [LLMMessage(role=Role.assistant, content="a")]
-            mock_agent_loop.set_approval_callback = MagicMock()
-            mock_agent_loop.aclose = AsyncMock()
+            mock_agent_loop = make_mock_subagent_loop(
+                mock_act, [LLMMessage(role=Role.assistant, content="a")]
+            )
             mock_agent_loop_class.return_value = mock_agent_loop
 
             args = TaskArgs(task="do something", agent="explore")
@@ -269,11 +278,9 @@ class TestTaskToolExecution:
             raise RuntimeError("boom")
 
         with patch("vibe.core.tools.builtins.task.AgentLoop") as mock_agent_loop_class:
-            mock_agent_loop = MagicMock()
-            mock_agent_loop.act = mock_act
-            mock_agent_loop.messages = [LLMMessage(role=Role.assistant, content="a")]
-            mock_agent_loop.set_approval_callback = MagicMock()
-            mock_agent_loop.aclose = AsyncMock()
+            mock_agent_loop = make_mock_subagent_loop(
+                mock_act, [LLMMessage(role=Role.assistant, content="a")]
+            )
             mock_agent_loop_class.return_value = mock_agent_loop
 
             args = TaskArgs(task="do something", agent="explore")
