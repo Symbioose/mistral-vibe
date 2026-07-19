@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from textual.widget import Widget
 
+from vibe.cli.textual_ui.widgets.cats import KittenMessage, OrchestratorCatMessage
 from vibe.cli.textual_ui.widgets.compact import CompactMessage
 from vibe.cli.textual_ui.widgets.loading import DEFAULT_LOADING_STATUS
 from vibe.cli.textual_ui.widgets.messages import (
@@ -76,6 +77,9 @@ class EventHandler:
         # tool call confirms them recoverable (stay muted), turn end escalates
         # them to hard errors.
         self._pending_error_results: list[ToolResultMessage] = []
+        # One kitten per running subagent, one fat cat overseeing them.
+        self._kittens: dict[str, KittenMessage] = {}
+        self._orchestrator_cat: OrchestratorCatMessage | None = None
 
     async def _handle_hook_event(
         self, event: HookEvent, loading_widget: LoadingWidget | None = None
@@ -272,22 +276,45 @@ class EventHandler:
     async def _handle_subagent_event(self, event: BaseEvent) -> None:
         # Attributed child events stay off the main transcript: the task tool
         # already streams a per-tool summary. Only lifecycle milestones are
-        # surfaced on the owning task widget.
+        # surfaced — as cats, obviously.
         if event.agent is None:
             return
         match event:
             case SubagentStartedEvent():
-                message = f"{event.agent.name}: started"
-                if event.branch:
-                    message += f" on branch {event.branch}"
-                self._set_subagent_stream(event.tool_call_id, message)
+                await self._mount_kitten(event)
             case SubagentFinishedEvent():
-                message = f"{event.agent.name}: {event.status}"
+                status = event.status
                 if event.merge_status != "not_attempted":
-                    message += f" ({event.merge_status.replace('_', ' ')})"
-                self._set_subagent_stream(event.tool_call_id, message)
+                    status += f" ({event.merge_status.replace('_', ' ')})"
+                if kitten := self._kittens.pop(event.tool_call_id, None):
+                    kitten.set_status(status)
+                elif event.agent is not None:
+                    self._set_subagent_stream(
+                        event.tool_call_id, f"{event.agent.name}: {status}"
+                    )
             case _:
                 pass
+
+    async def _mount_kitten(self, event: SubagentStartedEvent) -> None:
+        if event.agent is None:
+            return
+        anchor = self._tool_call_anchors.get(event.tool_call_id)
+        if anchor is None:
+            message = f"{event.agent.name}: started"
+            if event.branch:
+                message += f" on branch {event.branch}"
+            self._set_subagent_stream(event.tool_call_id, message)
+            return
+
+        if self._orchestrator_cat is None:
+            self._orchestrator_cat = OrchestratorCatMessage()
+            await self.mount_callback(self._orchestrator_cat, before=anchor)
+        self._orchestrator_cat.add_kitten()
+
+        kitten = KittenMessage(event.agent.name, branch=event.branch)
+        self._kittens[event.tool_call_id] = kitten
+        await self.mount_callback(kitten, after=anchor)
+        self._tool_call_anchors[event.tool_call_id] = kitten
 
     def _set_subagent_stream(self, tool_call_id: str, message: str) -> None:
         if tool_call := self.tool_calls.get(tool_call_id):
@@ -357,6 +384,8 @@ class EventHandler:
         self.tool_calls.clear()
         self._tool_call_anchors.clear()
         self._hook_containers.clear()
+        self._kittens.clear()
+        self._orchestrator_cat = None
         # On cancel nothing is terminal -- leave prior errors muted too.
         self._resolve_pending_errors(escalate=not cancelled)
 

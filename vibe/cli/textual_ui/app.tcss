@@ -1928,3 +1928,47 @@ FeedbackBar {
 .hook-severity-error .hook-system-icon {
     color: $error;
 }
+
+.orchestrator-cat,
+.subagent-kitten {
+    width: 100%;
+    height: auto;
+    margin-top: 1;
+}
+
+.subagent-kitten {
+    padding-left: 2;
+}
+
+.cat-container {
+    width: 100%;
+    height: auto;
+}
+
+.cat-art {
+    width: auto;
+    color: $secondary;
+}
+
+.fat-cat-art {
+    color: $mistral_orange;
+}
+
+.cat-label {
+    width: 1fr;
+    height: auto;
+    padding-left: 1;
+    color: $text-muted;
+
+    &:ansi {
+        text-style: dim;
+    }
+}
+
+.kitten-label {
+    margin-top: 1;
+}
+
+.fat-cat-label {
+    margin-top: 2;
+}
