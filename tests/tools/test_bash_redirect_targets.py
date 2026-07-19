@@ -57,6 +57,15 @@ class TestExtractRedirectTargets:
     def test_herestring_yields_nothing(self) -> None:
         assert _extract_redirect_targets("sort <<< 'b\na'") == []
 
+    def test_read_write_redirect_is_collected(self) -> None:
+        assert _extract_redirect_targets("echo x 1<> /tmp/evil") == ["/tmp/evil"]
+        assert _extract_redirect_targets("cmd <> /tmp/evil") == ["/tmp/evil"]
+
+    def test_experimental_bash_read_write_redirect_matches(self) -> None:
+        assert _extract_redirect_targets_experimental("echo x 1<> /tmp/evil") == [
+            "/tmp/evil"
+        ]
+
     def test_experimental_bash_extraction_matches(self) -> None:
         command = "cat > /parent/file.py << 'EOF'\nx\nEOF"
         assert _extract_redirect_targets_experimental(command) == ["/parent/file.py"]
@@ -141,3 +150,18 @@ class TestBashResolvePermissionWithRedirects:
 
         assert ctx is not None
         assert ctx.permission is ToolPermission.ALWAYS
+
+    def test_read_write_redirect_outside_workdir_asks(self, tmp_path: Path) -> None:
+        workdir = tmp_path / "wt"
+        workdir.mkdir()
+        outside = tmp_path / "parent" / "evil.txt"
+        bash = self.make_bash(workdir)
+
+        ctx = bash.resolve_permission(BashArgs(command=f"echo x 1<> {outside}"))
+
+        assert ctx is not None
+        assert ctx.permission is ToolPermission.ASK
+        assert any(
+            rp.scope is PermissionScope.OUTSIDE_DIRECTORY
+            for rp in ctx.required_permissions
+        )
