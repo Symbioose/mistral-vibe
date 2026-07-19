@@ -18,6 +18,7 @@ from vibe.cli.textual_ui.widgets.messages import (
 )
 from vibe.cli.textual_ui.widgets.no_markup_static import NoMarkupStatic
 from vibe.cli.textual_ui.widgets.tools import ToolCallMessage, ToolResultMessage
+from vibe.cli.textual_ui.widgets.workflow import WorkflowCallMessage
 from vibe.core.hooks.models import (
     HookEndEvent,
     HookEvent,
@@ -228,7 +229,10 @@ class EventHandler:
         else:
             # A follow-up tool call is the recovery signal: leave prior errors muted.
             self._resolve_pending_errors(escalate=False)
-            tool_call = ToolCallMessage(event)
+            if event.tool_name == "workflow":
+                tool_call = WorkflowCallMessage(event)
+            else:
+                tool_call = ToolCallMessage(event)
             if tool_call_id:
                 self.tool_calls[tool_call_id] = tool_call
                 self._tool_call_anchors[tool_call_id] = tool_call
@@ -270,7 +274,11 @@ class EventHandler:
 
     async def _handle_tool_stream(self, event: ToolStreamEvent) -> None:
         tool_call = self.tool_calls.get(event.tool_call_id)
-        if tool_call:
+        if tool_call is None:
+            return
+        if isinstance(tool_call, WorkflowCallMessage) and event.data is not None:
+            await tool_call.handle_workflow_event(event.data)
+        else:
             tool_call.set_stream_message(event.message)
 
     async def _handle_subagent_event(self, event: BaseEvent) -> None:

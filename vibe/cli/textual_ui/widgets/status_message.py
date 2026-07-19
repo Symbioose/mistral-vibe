@@ -92,6 +92,10 @@ class StatusMessage(SpinnerMixin, NoMarkupStatic):
     def get_content(self) -> str:
         return self._initial_text
 
+    @property
+    def indicator_state(self) -> IndicatorState:
+        return self._state
+
     def stop_spinning(self, success: bool = True) -> None:
         self.settle(IndicatorState.SUCCESS if success else IndicatorState.ERROR)
 

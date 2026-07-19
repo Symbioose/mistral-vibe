@@ -796,6 +796,178 @@ StatusMessage {
     }
 }
 
+.workflow-cat {
+    width: 100%;
+    height: auto;
+    padding-left: 2;
+    margin-top: 1;
+}
+
+.workflow-cat-strip {
+    width: 100%;
+    height: auto;
+}
+
+.workflow-cat-item {
+    margin-right: 1;
+
+    &.cat-color-0 { color: $mistral_orange; }
+    &.cat-color-1 { color: $secondary; }
+    &.cat-color-2 { color: $success; }
+    &.cat-color-3 { color: $warning; }
+    &.cat-color-4 { color: $primary; }
+    &.cat-color-5 { color: $foreground; }
+}
+
+.workflow-cat-label {
+    width: 100%;
+    padding-left: 0;
+    margin-top: 0;
+}
+
+.workflow-tree {
+    width: 100%;
+    height: auto;
+    padding: 0 0 0 2;
+}
+
+.workflow-phase {
+    width: 100%;
+    height: auto;
+}
+
+.workflow-phase-header {
+    width: 100%;
+    height: auto;
+    margin-top: 0;
+
+    &.pending {
+        color: $text-muted;
+
+        &:ansi {
+            text-style: dim;
+        }
+    }
+
+    &.running {
+        color: $mistral_orange;
+        text-style: bold;
+    }
+
+    &.done {
+        color: $success;
+    }
+}
+
+.workflow-phase-rows {
+    width: 100%;
+    height: auto;
+    padding: 0 0 0 2;
+}
+
+.workflow-agent-row {
+    width: 100%;
+    height: auto;
+}
+
+.workflow-agent-header {
+    width: 100%;
+    height: auto;
+}
+
+.workflow-agent-activity {
+    width: 100%;
+    height: auto;
+    padding: 0 0 0 2;
+}
+
+.workflow-activity-line {
+    width: 100%;
+    height: auto;
+    color: $text-muted;
+
+    &:ansi {
+        text-style: dim;
+    }
+}
+
+.workflow-logs {
+    width: 100%;
+    height: auto;
+    padding: 0 0 0 2;
+}
+
+.workflow-log-line {
+    width: 100%;
+    height: auto;
+    color: $text-muted;
+
+    &:ansi {
+        text-style: dim;
+    }
+}
+
+WorkflowInspectorScreen {
+    align: center middle;
+    background: $background 60%;
+}
+
+#workflow-inspector {
+    width: 90%;
+    height: 80%;
+    background: $surface;
+    border: round $mistral_orange;
+    padding: 1 2;
+}
+
+#workflow-inspector-title {
+    width: 100%;
+    height: auto;
+    color: $text-muted;
+    margin-bottom: 1;
+}
+
+#workflow-inspector-body {
+    width: 100%;
+    height: 1fr;
+}
+
+#workflow-inspector-tree {
+    width: 40%;
+    height: 100%;
+    border-right: solid $panel;
+    padding-right: 1;
+}
+
+#workflow-inspector-detail {
+    width: 60%;
+    height: 100%;
+    padding: 0 0 0 2;
+}
+
+.workflow-inspector-header {
+    width: 100%;
+    height: auto;
+    margin-bottom: 1;
+}
+
+.workflow-inspector-section {
+    width: 100%;
+    height: auto;
+    color: $mistral_orange;
+    margin: 1 0 0 0;
+}
+
+.workflow-inspector-body-text {
+    width: 100%;
+    height: auto;
+    color: $foreground;
+}
+
+.workflow-call:hover .status-indicator-text {
+    text-style: underline;
+}
+
 .tool-result {
     width: 100%;
     height: auto;
@@ -1933,7 +2105,6 @@ FeedbackBar {
 .subagent-kitten {
     width: 100%;
     height: auto;
-    margin-top: 1;
 }
 
 .subagent-kitten {
@@ -1958,17 +2129,10 @@ FeedbackBar {
     width: 1fr;
     height: auto;
     padding-left: 1;
+    margin-top: 1;
     color: $text-muted;
 
     &:ansi {
         text-style: dim;
     }
-}
-
-.kitten-label {
-    margin-top: 1;
-}
-
-.fat-cat-label {
-    margin-top: 2;
 }

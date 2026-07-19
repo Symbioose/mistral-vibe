@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
+import json
 from pathlib import Path
 import re
 from typing import ClassVar
@@ -30,9 +31,12 @@ from vibe.core.tools.builtins.read_file import ReadFileArgs, ReadFileResult
 from vibe.core.tools.builtins.todo import TodoArgs, TodoResult
 from vibe.core.tools.builtins.web_fetch import WebFetchResult
 from vibe.core.tools.builtins.web_search import WebSearchResult, WebSearchSource
+from vibe.core.tools.builtins.workflow import WorkflowArgs, WorkflowResult
 from vibe.core.tools.builtins.write_file import WriteFileArgs, WriteFileResult
+from vibe.core.workflow.models import WorkflowStatus
 
 _LINE_NUMBER_PREFIX = re.compile(r"^ *\d+→")
+_PROMPT_PREVIEW_MAX_LEN = 80
 _BACKTICK_RUN = re.compile(r"`+")
 _UNSAFE_INFO_STRING = re.compile(r"[^A-Za-z0-9_+\-.]")
 _MAX_INFO_STRING_LEN = 32
@@ -426,6 +430,54 @@ class WebFetchResultWidget(ToolResultWidget[WebFetchResult]):
         yield from self._footer()
 
 
+class WorkflowApprovalWidget(ToolApprovalWidget[WorkflowArgs]):
+    def compose(self) -> ComposeResult:
+        if self.args.script_path:
+            yield NoMarkupStatic(
+                f"Script: {self.args.script_path}", classes="approval-description"
+            )
+        for key, prompt in (self.args.prompts or {}).items():
+            first_line = prompt.strip().splitlines()[0] if prompt.strip() else ""
+            if len(first_line) > _PROMPT_PREVIEW_MAX_LEN:
+                first_line = first_line[: _PROMPT_PREVIEW_MAX_LEN - 1] + "…"
+            yield NoMarkupStatic(
+                f'prompts["{key}"]: {first_line}', classes="approval-description"
+            )
+        if self.args.args is not None:
+            yield NoMarkupStatic(
+                f"args: {json.dumps(self.args.args, ensure_ascii=False)}",
+                classes="approval-description",
+            )
+        if self.args.resume_from_run_id:
+            yield NoMarkupStatic(
+                f"Resuming from run: {self.args.resume_from_run_id}",
+                classes="approval-description",
+            )
+        if self.args.script:
+            yield NoMarkupStatic("")
+            yield Markdown(_fenced_code_block(self.args.script, "python"))
+
+
+class WorkflowResultWidget(ToolResultWidget[WorkflowResult]):
+    def compose(self) -> ComposeResult:
+        if not self.result:
+            yield from self._footer()
+            return
+        if self.result.error:
+            yield NoMarkupStatic(
+                f"Error: {self.result.error}", classes="tool-result-detail"
+            )
+        if self.result.result is not None:
+            pretty = json.dumps(self.result.result, indent=2, ensure_ascii=False)
+            yield from self._yield_truncated_text(pretty)
+        hint = (
+            f"run {self.result.run_id} · journal saved for resume"
+            if self.result.status is not WorkflowStatus.COMPLETED
+            else None
+        )
+        yield from self._footer(hint)
+
+
 APPROVAL_WIDGETS: dict[str, type[ToolApprovalWidget]] = {
     "bash": BashApprovalWidget,
     "read_file": ReadApprovalWidget,
@@ -433,6 +485,7 @@ APPROVAL_WIDGETS: dict[str, type[ToolApprovalWidget]] = {
     "edit": EditApprovalWidget,
     "grep": GrepApprovalWidget,
     "todo": TodoApprovalWidget,
+    "workflow": WorkflowApprovalWidget,
 }
 
 RESULT_WIDGETS: dict[str, type[ToolResultWidget]] = {
@@ -445,6 +498,7 @@ RESULT_WIDGETS: dict[str, type[ToolResultWidget]] = {
     "ask_user_question": AskUserQuestionResultWidget,
     "web_search": WebSearchResultWidget,
     "web_fetch": WebFetchResultWidget,
+    "workflow": WorkflowResultWidget,
 }
 
 # Tools whose result message text is allowed to contain clickable URLs.
