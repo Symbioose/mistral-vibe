@@ -1861,6 +1861,7 @@ class AgentLoop(AgentLoopHooksMixin):  # noqa: PLR0904
                 session_id=self.session_id,
                 mcp_pool=self._mcp_pool,
                 working_dir=self.working_dir,
+                bypass_tool_permissions=self.bypass_tool_permissions,
             ),
             **tool_call.args_dict,
         ):

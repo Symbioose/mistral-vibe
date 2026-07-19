@@ -269,7 +269,7 @@ class Task(
         completed = True
         try:
             async with aclosing(
-                subagent_loop.act(self._task_text(args, ctx))
+                subagent_loop.act(self._task_text(args, ctx, worktree))
             ) as events:
                 async for event in events:
                     if isinstance(event, AssistantEvent) and event.content:
@@ -360,6 +360,7 @@ class Task(
             permission_store=ctx.permission_store,
             hook_config_result=ctx.hook_config_result,
             working_dir=worktree.path if worktree else None,
+            force_bypass_tool_permissions=ctx.bypass_tool_permissions,
         )
         if ctx.session_id:
             subagent_loop.parent_session_id = ctx.session_id
@@ -367,14 +368,29 @@ class Task(
             subagent_loop.set_approval_callback(ctx.approval_callback)
         return subagent_loop
 
-    def _task_text(self, args: TaskArgs, ctx: InvokeContext) -> str:
-        if not ctx.scratchpad_dir:
-            return args.task
-        return (
-            f"Scratchpad directory: {ctx.scratchpad_dir}\n"
-            "You can read and write files here without permission prompts.\n\n"
-            f"{args.task}"
-        )
+    def _task_text(
+        self, args: TaskArgs, ctx: InvokeContext, worktree: PreparedWorktree | None
+    ) -> str:
+        parts: list[str] = []
+        if worktree is not None:
+            base = ctx.working_dir or Path.cwd()
+            parts.append(
+                f"Working directory: {worktree.path}\n"
+                f"You are in an isolated git worktree on branch "
+                f"'{worktree.branch}'. Always use relative paths or paths under "
+                f"your working directory — writes outside it are denied. If the "
+                f"task mentions absolute paths under {base}, operate on the same "
+                f"relative paths inside your working directory instead. Do not "
+                f"run git add/commit/merge/push: your changes are committed to "
+                f"your branch automatically when you finish."
+            )
+        if ctx.scratchpad_dir:
+            parts.append(
+                f"Scratchpad directory: {ctx.scratchpad_dir}\n"
+                "You can read and write files here without permission prompts."
+            )
+        parts.append(args.task)
+        return "\n\n".join(parts)
 
     def _legacy_stream_event(
         self, event: ToolResultEvent, ctx: InvokeContext
