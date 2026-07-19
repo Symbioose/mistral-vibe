@@ -41,6 +41,22 @@ class TestExtractRedirectTargets:
     def test_no_redirect_yields_nothing(self) -> None:
         assert _extract_redirect_targets("ls -la /tmp") == []
 
+    def test_input_redirect_is_not_a_write_target(self) -> None:
+        assert _extract_redirect_targets("cat < /etc/hosts") == []
+
+    def test_stderr_redirect_is_collected(self) -> None:
+        assert _extract_redirect_targets("make 2> err.log") == ["err.log"]
+
+    def test_ampersand_redirect_is_collected(self) -> None:
+        assert _extract_redirect_targets("python3 x.py &> all.log") == ["all.log"]
+
+    def test_process_substitution_is_not_a_write_target(self) -> None:
+        assert _extract_redirect_targets("tee log > >(grep x)") == []
+        assert _extract_redirect_targets("diff <(ls a) <(ls b)") == []
+
+    def test_herestring_yields_nothing(self) -> None:
+        assert _extract_redirect_targets("sort <<< 'b\na'") == []
+
     def test_experimental_bash_extraction_matches(self) -> None:
         command = "cat > /parent/file.py << 'EOF'\nx\nEOF"
         assert _extract_redirect_targets_experimental(command) == ["/parent/file.py"]

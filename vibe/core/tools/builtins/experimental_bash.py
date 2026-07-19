@@ -199,21 +199,32 @@ def _extract_commands(command: str) -> list[str]:
     return commands
 
 
+_WRITE_REDIRECT_OPERATORS = {">", ">>", "&>", "&>>", ">|", ">&", "<>"}
+
+
 def _extract_redirect_targets(command: str) -> list[str]:
-    """Collect the file targets of output redirections (``>``, ``>>``).
+    """Collect the file targets of output redirections (``>``, ``>>``, ``&>``).
 
     Redirections write through *any* binary — including read-only allowlisted
     ones like ``cat`` — so their targets must be permission-checked like the
-    path arguments of file-manipulating commands.
+    path arguments of file-manipulating commands. Input redirections (``<``)
+    only read and stay out of scope, and process substitutions are not file
+    targets (their inner command is permission-checked as a command).
     """
     parser = _get_parser()
     tree = parser.parse(command.encode("utf-8"))
     targets: list[str] = []
 
     def find_redirects(node: Node) -> None:
-        if node.type == "file_redirect":
+        if node.type == "file_redirect" and any(
+            child.type in _WRITE_REDIRECT_OPERATORS for child in node.children
+        ):
             destination = node.child_by_field_name("destination")
-            if destination is not None and destination.text is not None:
+            if (
+                destination is not None
+                and destination.type != "process_substitution"
+                and destination.text is not None
+            ):
                 targets.append(destination.text.decode("utf-8"))
         for child in node.children:
             find_redirects(child)
