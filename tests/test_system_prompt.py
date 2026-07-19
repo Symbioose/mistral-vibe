@@ -175,6 +175,28 @@ def test_scratchpad_section_absent_when_not_passed() -> None:
     assert "Scratchpad Directory" not in prompt
 
 
+def test_subagents_section_directs_parallel_fanout() -> None:
+    config = build_test_vibe_config(
+        include_prompt_detail=True,
+        include_model_info=False,
+        include_commit_signature=False,
+    )
+    tool_manager = ToolManager(lambda: config)
+    skill_manager = SkillManager(lambda: config)
+    agent_manager = AgentManager(LegacyConfigOrchestrator(config))
+
+    prompt = get_universal_system_prompt(
+        tool_manager, config, skill_manager, agent_manager
+    )
+
+    assert "# Available Subagents" in prompt
+    assert "**explore**" in prompt
+    assert "**worker**" in prompt
+    flat = " ".join(prompt.split())
+    assert "launch one subagent per unit — in parallel, in a single turn" in flat
+    assert "the user does not need to ask for it" in flat
+
+
 def test_headless_section_included_when_enabled() -> None:
     config = build_test_vibe_config(
         include_model_info=False, include_commit_signature=False

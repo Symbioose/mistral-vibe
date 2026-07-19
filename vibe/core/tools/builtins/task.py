@@ -76,7 +76,11 @@ class TaskArgs(BaseModel):
     task: str = Field(description="The task for the agent to perform")
     agent: str = Field(
         default="explore",
-        description="The type of specialized subagent to use for this task",
+        description=(
+            "The subagent type to use for this task; see Available Subagents "
+            "in the system prompt. Use 'worker' for work that changes files, "
+            "'explore' for read-only research."
+        ),
     )
 
 
@@ -116,7 +120,9 @@ class TaskResult(BaseModel):
 
 class TaskToolConfig(BaseToolConfig):
     permission: ToolPermission = ToolPermission.ASK
-    allowlist: list[str] = Field(default=[BuiltinAgentName.EXPLORE])
+    allowlist: list[str] = Field(
+        default=[BuiltinAgentName.EXPLORE, BuiltinAgentName.WORKER]
+    )
     max_parallel: int = Field(
         default=4, description="Maximum number of subagents running concurrently."
     )

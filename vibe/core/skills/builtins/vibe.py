@@ -606,8 +606,9 @@ There are two kinds of agents:
   implements code inside an isolated git worktree on a dedicated branch
   (`vibe-worker-<id>` under `~/.vibe/worktrees/`). File edits inside the
   worktree are auto-approved; outside they are denied. Requires a git repo.
-  Not in the task tool's default allowlist, so spawning one asks for approval
-  unless `"worker"` is added to `[tools.task] allowlist`. Several workers can
+  In the task tool's default allowlist alongside `explore`, so spawning one is
+  auto-approved; remove `"worker"` from `[tools.task] allowlist` to require
+  approval per spawn. Several workers can
   run in parallel (capped by `[tools.task] max_parallel`, default 4), each on
   its own branch. Merge-back is controlled by `[tools.task] merge`:
   `"manual"` (default) leaves the branch for the user; `"auto"` merges
