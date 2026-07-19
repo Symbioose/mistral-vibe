@@ -48,6 +48,9 @@ class TextOutputFormatter(OutputFormatter):
         print(text, file=self.stream)
 
     def on_event(self, event: BaseEvent) -> None:
+        if event.agent is not None:
+            # Subagent-attributed events never speak for the root agent.
+            return
         match event:
             case AssistantEvent():
                 self._final_response = event.content

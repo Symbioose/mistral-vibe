@@ -68,7 +68,7 @@ class TurnSummaryTracker(TurnSummaryPort):
         self._data = TurnSummaryData(user_message=user_message)
 
     def track(self, event: BaseEvent) -> None:
-        if self._data is None:
+        if self._data is None or event.agent is not None:
             return
         match event:
             case UserMessageEvent(message_id=message_id):

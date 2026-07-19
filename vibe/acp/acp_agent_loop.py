@@ -1706,6 +1706,10 @@ class VibeAcpAgentLoop(AcpAgent):
             )
         ) as events:
             async for event in events:
+                # Subagent-attributed events have no ACP representation yet;
+                # clients keep the summarized view the task tool streams.
+                if event.agent is not None:
+                    continue
                 if isinstance(event, UserMessageEvent):
                     field_meta = self._user_display_content_meta(user_display_content)
                     yield UserMessageChunk(
