@@ -182,6 +182,10 @@ keep_worktrees = "on-failure"      # "always" | "on-failure" | "never"
 
 Workers require a git repository. Custom write-capable subagents must set `isolation = "worktree"` in their profile. Note that rewind does not undo an `auto` merge — the default `manual` mode never touches your checkout.
 
+#### Workflow Orchestration
+
+For tasks that need more agents than one conversation can coordinate — codebase-wide audits, large migrations, cross-checked research — the `workflow` tool lets the model write a small orchestration script (fan-out, pipelines, verification phases) that is statically validated before any agent spawns and executed under a concurrency cap. Progress renders live in the chat, `ctrl+w` opens a per-agent inspector, and every run is journaled so it can be resumed without re-running unchanged agents. See [docs/workflow.md](docs/workflow.md) for the script API and [docs/workflow-benchmark.md](docs/workflow-benchmark.md) for measured results.
+
 ### Interactive User Questions
 
 The `ask_user_question` tool allows the agent to ask you clarifying questions during its work. This enables more interactive and collaborative workflows.

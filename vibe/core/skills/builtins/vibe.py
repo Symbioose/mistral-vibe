@@ -623,6 +623,21 @@ becomes a worker by setting `agent_type = "subagent"` and
 `isolation = "worktree"`; write-capable subagents without worktree isolation
 are rejected by the task tool.
 
+### Workflow orchestration
+
+The `workflow` tool runs a model-written async Python script that spawns many
+subagents deterministically (`agent()`, `parallel()`, `pipeline()`, `phase()`,
+`log()` primitives). Scripts are statically validated before execution
+(no imports, no filesystem/clock/randomness access, reserved primitive names,
+200-line cap). Concurrency is capped by `[tools.workflow] max_concurrency`
+(default `min(16, cpu - 2)`); `[tools.workflow] fast_model` optionally routes
+mechanical shard work to a cheaper model. Each run journals successful
+`agent()` calls under `<session_dir>/workflow/<run_id>/` and can be replayed
+with `resume_from_run_id` — unchanged calls replay from the journal with zero
+API calls. The TUI shows a live per-phase tree of agents; `ctrl+w` (or a
+click) opens the workflow inspector for per-agent detail. See
+`docs/workflow.md`.
+
 ## Built-in Slash Commands
 
 - `/help` - Show help message
