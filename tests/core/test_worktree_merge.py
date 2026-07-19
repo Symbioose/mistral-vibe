@@ -53,6 +53,32 @@ def test_commit_worktree_commits_new_and_modified_files(
     assert {"new.txt", "file.txt"} <= set(committed.stats.files)
 
 
+def test_commit_worktree_skips_build_artifacts(git_repo: Repo, tmp_path: Path) -> None:
+    worktree = prepare_worktree_session("worker-a", tmp_path)
+    (worktree.root / "code.py").write_text("x = 1\n")
+    pycache = worktree.root / "__pycache__"
+    pycache.mkdir()
+    (pycache / "code.cpython-312.pyc").write_bytes(b"\x00")
+    (worktree.root / ".DS_Store").write_bytes(b"\x00")
+
+    sha = commit_worktree(worktree, "worker changes")
+
+    assert sha is not None
+    committed = set(Repo(worktree.root).head.commit.stats.files)
+    assert committed == {"code.py"}
+
+
+def test_commit_worktree_returns_none_when_only_artifacts_exist(
+    git_repo: Repo, tmp_path: Path
+) -> None:
+    worktree = prepare_worktree_session("worker-a", tmp_path)
+    pycache = worktree.root / "__pycache__"
+    pycache.mkdir()
+    (pycache / "junk.pyc").write_bytes(b"\x00")
+
+    assert commit_worktree(worktree, "no-op") is None
+
+
 def test_merge_report_clean_branch(git_repo: Repo, tmp_path: Path) -> None:
     worktree = prepare_worktree_session("worker-a", tmp_path)
     (worktree.root / "new.txt").write_text("created\n")

@@ -169,9 +169,7 @@ class Task(
         result = event.result
         if isinstance(result, TaskResult):
             turn_word = "turn" if result.turns_used == 1 else "turns"
-            suffix = (
-                f"[{result.branch}: {result.merge_status}]" if result.branch else ""
-            )
+            suffix = cls._branch_suffix(result)
             if not result.completed:
                 return ToolResultDisplay(
                     success=False,
@@ -184,6 +182,20 @@ class Task(
                 suffix=suffix,
             )
         return ToolResultDisplay(success=True, message="Agent completed")
+
+    @staticmethod
+    def _branch_suffix(result: TaskResult) -> str:
+        if not result.branch:
+            return ""
+        match result.merge_status:
+            case "merged":
+                return f"[{result.branch}: merged]"
+            case "conflicts":
+                return f"[{result.branch}: conflicts]"
+            case "no_changes":
+                return "[no changes]"
+            case _:
+                return f"[branch {result.branch}]"
 
     @classmethod
     def get_status_text(cls) -> str:
